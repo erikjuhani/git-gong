@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"gong/doc"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -11,7 +12,7 @@ var rootCmd = &cobra.Command{
 	Use:     "gong",
 	Short:   "",
 	Long:    ``,
-	Version: "0.1.0-alpha",
+	Version: doc.Version,
 }
 
 func Execute() {
