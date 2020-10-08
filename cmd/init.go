@@ -19,7 +19,7 @@ var initCmd = &cobra.Command{
   refs/heads, refs/tags and template files.
 
   By default Gong initializes the repository's default branch as main instead of master.`,
-	Run: run,
+	RunE: runE,
 }
 
 func initFlags() {
@@ -29,5 +29,6 @@ func initFlags() {
 	)
 }
 
-func run(cmd *cobra.Command, args []string) {
+func runE(cmd *cobra.Command, args []string) error {
+	return nil
 }
