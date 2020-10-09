@@ -57,6 +57,8 @@ func TestInitCmd(t *testing.T) {
 
 			if flag := initCmd.Flags().Lookup("default-branch"); flag != nil && flag.Value.String() != "" {
 				expectedPaths = []string{"refs/heads/dev"}
+			} else {
+				expectedPaths = []string{"refs/heads/main"}
 			}
 
 			for _, p := range expectedPaths {
