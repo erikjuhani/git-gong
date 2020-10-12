@@ -9,8 +9,8 @@ import (
 )
 
 func init() {
-	initFlags()
 	rootCmd.AddCommand(initCmd)
+	initFlags()
 }
 
 var (
