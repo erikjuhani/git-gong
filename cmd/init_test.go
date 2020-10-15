@@ -42,7 +42,7 @@ func TestInitCmd(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			args := []string{"init"}
+			args := []string{initCmd.Name()}
 
 			gitDir := ".git"
 			expectedPaths := []string{"HEAD", "objects", "refs/heads", "refs/tags"}

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestCloneCmnd(t *testing.T) {
+func TestCloneCmd(t *testing.T) {
 	tests := []struct {
 		name, repository, url, directory string
 	}{
@@ -38,16 +38,17 @@ func TestCloneCmnd(t *testing.T) {
 
 			args := []string{cloneCmd.Name(), tt.url}
 
+			clone := tt.repository
+			if tt.directory != "" {
+				args = append(args, tt.directory)
+				clone = tt.directory
+			}
+
 			rootCmd.SetArgs(args)
 
 			err = rootCmd.Execute()
 			if err != nil {
 				t.Fatal(err)
-			}
-
-			clone := tt.repository
-			if tt.directory != "" {
-				clone = tt.directory
 			}
 
 			if _, err := os.Stat(clone); err != nil {
