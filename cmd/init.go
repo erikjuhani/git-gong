@@ -29,7 +29,18 @@ var initCmd = &cobra.Command{
 
   By default Gong initializes the repository's default branch as main instead of master.`,
 	Args: cobra.MaximumNArgs(1),
-	RunE: runE,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		path, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+
+		if len(args) == 1 {
+			path = args[0]
+		}
+
+		return initRepository(path)
+	},
 }
 
 func initFlags() {
@@ -45,10 +56,6 @@ func initRepository(path string) error {
 		return err
 	}
 
-	checkoutOpts := &git.CheckoutOpts{
-		Strategy: git.CheckoutSafe | git.CheckoutRecreateMissing | git.CheckoutAllowConflicts | git.CheckoutUseTheirs,
-	}
-
 	idx, err := repo.Index()
 	if err != nil {
 		return err
@@ -61,26 +68,11 @@ func initRepository(path string) error {
 
 	initRef := fmt.Sprintf("refs/heads/%s", defaultBranch)
 
-	ref, err := repo.References.Create(initRef, treeID, false, "")
+	ref, err := repo.References.Create(initRef, treeID, false, "Repository initialized")
 	if err != nil {
 		return err
 	}
 	defer ref.Free()
 
-	repo.CheckoutHead(checkoutOpts)
-
 	return repo.SetHead(initRef)
-}
-
-func runE(cmd *cobra.Command, args []string) error {
-	path, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	if len(args) == 1 {
-		path = args[0]
-	}
-
-	return initRepository(path)
 }
