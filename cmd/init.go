@@ -1,10 +1,9 @@
 package cmd
 
 import (
-	"fmt"
+	"gong/gong"
 	"os"
 
-	git "github.com/libgit2/git2go/v30"
 	"github.com/spf13/cobra"
 )
 
@@ -51,28 +50,6 @@ func initFlags() {
 }
 
 func initRepository(path string) error {
-	repo, err := git.InitRepository(path, bare)
-	if err != nil {
-		return err
-	}
-
-	idx, err := repo.Index()
-	if err != nil {
-		return err
-	}
-
-	treeID, err := idx.WriteTree()
-	if err != nil {
-		return err
-	}
-
-	initRef := fmt.Sprintf("refs/heads/%s", defaultBranch)
-
-	ref, err := repo.References.Create(initRef, treeID, false, "Repository initialized")
-	if err != nil {
-		return err
-	}
-	defer ref.Free()
-
-	return repo.SetHead(initRef)
+	_, err := gong.Init(path, bare, defaultBranch)
+	return err
 }

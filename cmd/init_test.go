@@ -46,12 +46,11 @@ func TestInitCmd(t *testing.T) {
 
 			gitDir := ".git"
 			expectedPaths := []string{"HEAD", "objects", "refs/heads", "refs/tags"}
+			expectedHead := "ref: refs/heads/main"
 
 			if tt.flag != "" {
 				args = append(args, "--default-branch", "dev")
-				expectedPaths = append(expectedPaths, "refs/heads/dev")
-			} else {
-				expectedPaths = append(expectedPaths, "refs/heads/main")
+				expectedHead = "ref: refs/heads/dev"
 			}
 
 			if tt.dirName != "" {
@@ -70,6 +69,17 @@ func TestInitCmd(t *testing.T) {
 				generatedPath := fmt.Sprintf("%s/%s/%s", dir, gitDir, p)
 				if _, err := os.Stat(generatedPath); err != nil {
 					if os.IsNotExist(err) {
+						t.Fatal(err)
+					}
+				}
+
+				if p == "HEAD" {
+					head, err := ioutil.ReadFile(generatedPath)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if string(head) != expectedHead {
+						err := fmt.Errorf("%s does not match with expected %s", p, expectedHead)
 						t.Fatal(err)
 					}
 				}

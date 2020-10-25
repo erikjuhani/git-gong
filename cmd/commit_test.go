@@ -129,7 +129,7 @@ func TestCommitCmd(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			_, err := repo.LookupCommit(head.Target())
+			_, err = repo.LookupCommit(head.Target())
 			if err != nil {
 				t.Fatal(err)
 			}
