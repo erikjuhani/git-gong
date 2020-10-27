@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"gong/git"
 	"io/ioutil"
@@ -96,9 +97,18 @@ func TestCommitCmd(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			_, err = repo.Core.LookupCommit(head.Target())
+			commit, err := repo.Core.LookupCommit(head.Target())
 			if err != nil {
 				t.Fatal(err)
+			}
+
+			tree, err := repo.Core.LookupTree(commit.TreeId())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if tree.EntryCount() < 1 {
+				t.Fatal(errors.New("commit not found in tree"))
 			}
 		})
 	}
