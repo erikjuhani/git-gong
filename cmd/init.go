@@ -1,7 +1,8 @@
 package cmd
 
 import (
-	"gong/gong"
+	"fmt"
+	"gong/git"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -13,7 +14,7 @@ func init() {
 }
 
 var (
-	defaultBranch string = "main"
+	defaultBranch string
 	bare          bool
 )
 
@@ -28,28 +29,32 @@ var initCmd = &cobra.Command{
 
   By default Gong initializes the repository's default branch as main instead of master.`,
 	Args: cobra.MaximumNArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Run: func(cmd *cobra.Command, args []string) {
 		path, err := os.Getwd()
 		if err != nil {
-			return err
+			fmt.Println(err)
 		}
 
 		if len(args) == 1 {
 			path = args[0]
 		}
 
-		return initRepository(path)
+		err = initRepository(path)
+		if err != nil {
+			fmt.Println(err)
+		}
 	},
 }
 
 func initFlags() {
 	initCmd.Flags().StringVarP(
-		&defaultBranch, "default-branch", "d", defaultBranch,
+		&defaultBranch, "default-branch", "d", git.DefaultReference,
 		"Use specified name for the default branch, when creating a new repository.",
 	)
 }
 
 func initRepository(path string) error {
-	_, err := gong.Init(path, bare, defaultBranch)
+	repo, err := git.Init(path, bare, defaultBranch)
+	defer repo.Free()
 	return err
 }

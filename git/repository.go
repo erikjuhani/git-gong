@@ -1,0 +1,233 @@
+package git
+
+import (
+	"errors"
+	"fmt"
+	"gong/cli"
+	"io/ioutil"
+	"os"
+	"strings"
+	"time"
+
+	lib "github.com/libgit2/git2go/v30"
+)
+
+// TODO: Move this somewhere more appropriate
+func emptyString(str string) bool {
+	return len(strings.TrimSpace(str)) == 0
+}
+
+type Repository struct {
+	Core  *lib.Repository
+	index *lib.Index
+}
+
+var (
+	DefaultReference = "main"
+)
+
+// Free from memory
+func (r *Repository) Free() {
+	if r.Core != nil {
+		r.Core.Free()
+	}
+	if r.index != nil {
+		r.index.Free()
+	}
+}
+
+func Init(path string, bare bool, initialReference string) (repo *Repository, err error) {
+	gitRepo, err := lib.InitRepository(path, bare)
+	if err != nil {
+		return
+	}
+
+	if emptyString(initialReference) {
+		initialReference = DefaultReference
+	}
+
+	initRef := fmt.Sprintf("refs/heads/%s", initialReference)
+	err = ioutil.WriteFile(fmt.Sprintf("%s/HEAD", gitRepo.Path()), []byte("ref: "+initRef), 0644)
+	if err != nil {
+		return
+	}
+
+	idx, err := gitRepo.Index()
+	if err != nil {
+		return
+	}
+
+	repo = &Repository{
+		Core:  gitRepo,
+		index: idx,
+	}
+
+	return
+}
+
+func Open() (repo *Repository, err error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	gitRepo, err := lib.OpenRepository(wd)
+	if err != nil {
+		return
+	}
+
+	idx, err := gitRepo.Index()
+	if err != nil {
+		return
+	}
+
+	repo = &Repository{
+		Core:  gitRepo,
+		index: idx,
+	}
+
+	return
+}
+
+func (r *Repository) Changed() (err error) {
+	diff, err := r.Core.DiffIndexToWorkdir(
+		r.index,
+		&lib.DiffOptions{Flags: lib.DiffIncludeUntracked},
+	)
+	if err != nil {
+		return
+	}
+
+	defer diff.Free()
+
+	stats, err := diff.Stats()
+	if err != nil {
+		return
+	}
+
+	defer stats.Free()
+
+	changedFiles := stats.FilesChanged()
+
+	status, err := r.Core.StatusList(&lib.StatusOptions{})
+	if err != nil {
+		return
+	}
+
+	entries, err := status.EntryCount()
+	if err != nil {
+		return
+	}
+
+	defer status.Free()
+
+	if changedFiles == 0 && entries == 0 {
+		err = errors.New("no files changed, nothing to commit, working tree clean")
+		return
+	}
+
+	return
+}
+
+func (r *Repository) AddToIndex(pathspec []string) (treeID *lib.Oid, err error) {
+	if err = r.Changed(); err != nil {
+		return
+	}
+
+	idx := r.index
+
+	if err = idx.AddAll(pathspec, lib.IndexAddDefault, nil); err != nil {
+		return
+	}
+
+	treeID, err = idx.WriteTree()
+	if err != nil {
+		return
+	}
+
+	if err = idx.Write(); err != nil {
+		return
+	}
+
+	return
+}
+
+func (r *Repository) createCommit(treeID *lib.Oid, commit *lib.Commit, msg string) (id *lib.Oid, err error) {
+	tree, err := r.Core.LookupTree(treeID)
+	if err != nil {
+		return
+	}
+
+	sig := signature()
+
+	if emptyString(msg) {
+		input, cliErr := cli.CaptureInput()
+		if cliErr != nil {
+			return nil, cliErr
+		}
+
+		msg = string(input)
+	}
+
+	if emptyString(msg) {
+		err = errors.New("Aborting due to empty commit message")
+		return
+	}
+
+	if commit != nil {
+		return r.Core.CreateCommit("HEAD", sig, sig, string(msg), tree, commit)
+	}
+
+	// Initial commit
+	return r.Core.CreateCommit("HEAD", sig, sig, string(msg), tree)
+}
+
+func (r *Repository) Commit(treeID *lib.Oid, msg string) (commitID *lib.Oid, err error) {
+	unborn, err := r.Core.IsHeadUnborn()
+	if err != nil {
+		return
+	}
+
+	if unborn {
+		commitID, err = r.createCommit(treeID, nil, msg)
+		return
+	}
+
+	head, err := r.Core.Head()
+	if err != nil {
+		return
+	}
+
+	currentTip, err := r.Core.LookupCommit(head.Target())
+	if err != nil {
+		return
+	}
+
+	return r.createCommit(treeID, currentTip, msg)
+}
+
+func (r *Repository) References() ([]string, error) {
+	var list []string
+	iter, err := r.Core.NewReferenceIterator()
+	if err != nil {
+		return list, err
+	}
+
+	nameIter := iter.Names()
+	name, err := nameIter.Next()
+	for err == nil {
+		list = append(list, name)
+		name, err = nameIter.Next()
+	}
+
+	return list, err
+}
+
+// TODO get signature from git configuration
+func signature() *lib.Signature {
+	return &lib.Signature{
+		Name:  "gong tester",
+		Email: "gong@tester.com",
+		When:  time.Now(),
+	}
+}

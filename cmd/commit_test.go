@@ -2,79 +2,34 @@ package cmd
 
 import (
 	"fmt"
+	"gong/git"
 	"io/ioutil"
+	"log"
 	"os"
 	"testing"
-	"time"
-
-	git "github.com/libgit2/git2go/v30"
 )
 
 func createTestRepo() (*git.Repository, error) {
-	path, err := ioutil.TempDir("", "gong-clone")
+	path, err := ioutil.TempDir("", "gong")
 	if err != nil {
 		return nil, err
 	}
 
-	repo, err := git.InitRepository(path, false)
-	if err != nil {
-		return nil, err
-	}
-
-	sig := &git.Signature{
-		Name:  "gong tester",
-		Email: "gong@tester.com",
-		When:  time.Now(),
-	}
-
-	tmpfile := "TMPGONG"
-	err = ioutil.WriteFile(fmt.Sprintf("%s/%s", path, tmpfile), []byte{}, 0644)
-
-	idx, err := repo.Index()
-	if err != nil {
-		return nil, err
-	}
-
-	err = idx.AddByPath("TMPGONG")
-	if err != nil {
-		return nil, err
-	}
-
-	err = idx.Write()
-	if err != nil {
-		return nil, err
-	}
-
-	treeID, err := idx.WriteTree()
-	if err != nil {
-		return nil, err
-	}
-
-	tree, err := repo.LookupTree(treeID)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = repo.CreateCommit("HEAD", sig, sig, "test", tree)
-	if err != nil {
-		return nil, err
-	}
-
-	return repo, nil
+	return git.Init(path, false, "")
 }
 
 func cleanupTestRepo(r *git.Repository) {
-	if err := os.RemoveAll(r.Workdir()); err != nil {
+	if err := os.RemoveAll(r.Core.Workdir()); err != nil {
 		panic(err)
 	}
-	r.Free()
+	r.Core.Free()
 }
 
 func TestCommitCmd(t *testing.T) {
 	tests := []struct {
-		name      string
-		files     []string
-		stageOnly bool
+		name  string
+		files []string
+		args  []string
 	}{
 		{
 			name: `Should stage and record changes to repository.
@@ -82,16 +37,16 @@ func TestCommitCmd(t *testing.T) {
 			and are ready to be staged and recorded to repository.
 			If no arguments were given add all changed files to stage,
 			commit and record to repository.`,
-			files:     []string{"gong_file"},
-			stageOnly: false,
+			files: []string{"gong_file"},
+			args:  []string{""},
 		},
 		{
 			name: `Should stage and record changes to repository.
 			Use <pathspec> or <pathpattern> for files that has been changed
 			and are ready to be staged and recorded to repository.
 			If no arguments were given add all changed files to stage.`,
-			files:     []string{"gong_file", "another_gong_file"},
-			stageOnly: false,
+			files: []string{"gong_file", "another_gong_file_in_a_new_directory"},
+			args:  []string{""},
 		},
 	}
 
@@ -104,16 +59,28 @@ func TestCommitCmd(t *testing.T) {
 
 			defer cleanupTestRepo(repo)
 
-			if err := os.Chdir(repo.Workdir()); err != nil {
+			if err := os.Chdir(repo.Core.Workdir()); err != nil {
 				t.Fatal(err)
 			}
 
-			args := []string{commitCmd.Name()}
+			args := []string{commitCmd.Name(), "-m", "testmsg"}
+			args = append(args, tt.args...)
 
 			rootCmd.SetArgs(args)
 
-			for _, f := range tt.files {
-				err := ioutil.WriteFile(fmt.Sprintf("%s/%s", repo.Workdir(), f), []byte{}, 0644)
+			for i, f := range tt.files {
+				var err error
+				if i == 1 {
+					dirName, err := ioutil.TempDir(repo.Core.Workdir(), "tmp")
+					if err != nil {
+						t.Fatal(err)
+					}
+					log.Println(dirName)
+					err = ioutil.WriteFile(fmt.Sprintf("%s/%s/%s", repo.Core.Workdir(), dirName, f), []byte{}, 0644)
+				} else {
+					err = ioutil.WriteFile(fmt.Sprintf("%s/%s", repo.Core.Workdir(), f), []byte{}, 0644)
+				}
+
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -124,17 +91,15 @@ func TestCommitCmd(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			head, err := repo.Head()
+			head, err := repo.Core.Head()
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			_, err = repo.LookupCommit(head.Target())
+			_, err = repo.Core.LookupCommit(head.Target())
 			if err != nil {
 				t.Fatal(err)
 			}
-
-			// TODO implement testing phase fully after code is done.
 		})
 	}
 }

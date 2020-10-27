@@ -2,9 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"gong/gong"
+	"gong/git"
 
-	git "github.com/libgit2/git2go/v30"
 	"github.com/spf13/cobra"
 )
 
@@ -16,6 +15,7 @@ func init() {
 var (
 	repo      *git.Repository
 	stageOnly bool
+	commitMsg string
 )
 
 var commitCmd = &cobra.Command{
@@ -39,24 +39,30 @@ func commitFlags() {
 		&stageOnly, "stage", "s", false,
 		"Use to stage file changes instead of a commit",
 	)
-
+	commitCmd.Flags().StringVarP(
+		&commitMsg, "message", "m", "",
+		"Set commit message",
+	)
 }
 
 func commit(paths []string) (err error) {
-	repo, err := gong.Open()
+	repo, err := git.Open()
 	if err != nil {
 		return
 	}
+
+	defer repo.Free()
 
 	treeID, err := repo.AddToIndex(paths)
 	if err != nil {
 		return
 	}
 
-	_, err = repo.Commit(treeID)
-	if err != nil {
+	if stageOnly {
 		return
 	}
+
+	_, err = repo.Commit(treeID, commitMsg)
 
 	return
 }
