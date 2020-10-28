@@ -1,13 +1,17 @@
 package cmd
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"gong/git"
 	"io/ioutil"
-	"log"
 	"os"
+	"path"
 	"testing"
+
+	lib "github.com/libgit2/git2go/v30"
 )
 
 func createTestRepo() (*git.Repository, error) {
@@ -38,7 +42,7 @@ func TestCommitCmd(t *testing.T) {
 			and are ready to be staged and recorded to repository.
 			If no arguments were given add all changed files to stage,
 			commit and record to repository.`,
-			files: []string{"gong_file"},
+			files: []string{"README.md"},
 			args:  []string{""},
 		},
 		{
@@ -46,40 +50,48 @@ func TestCommitCmd(t *testing.T) {
 			Use <pathspec> or <pathpattern> for files that has been changed
 			and are ready to be staged and recorded to repository.
 			If no arguments were given add all changed files to stage.`,
-			files: []string{"gong_file", "another_gong_file_in_a_new_directory"},
+			files: []string{"gong_test.go", "another_gong_file_in_a_new_directory.go", ".env"},
 			args:  []string{""},
 		},
+	}
+	repo, err := createTestRepo()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer cleanupTestRepo(repo)
+
+	workdir := repo.Core.Workdir()
+
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatal(err)
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo, err := createTestRepo()
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			defer cleanupTestRepo(repo)
-
-			if err := os.Chdir(repo.Core.Workdir()); err != nil {
-				t.Fatal(err)
-			}
-
 			args := []string{commitCmd.Name(), "-m", "testmsg"}
 			args = append(args, tt.args...)
 
 			rootCmd.SetArgs(args)
 
+			newFiles := make(map[string]struct{})
+
 			for i, f := range tt.files {
 				var err error
+				var file string
 				if i == 1 {
-					dirName, err := ioutil.TempDir(repo.Core.Workdir(), "tmp")
+					dirname, err := ioutil.TempDir(workdir, "tmp")
 					if err != nil {
 						t.Fatal(err)
 					}
-					log.Println(dirName)
-					err = ioutil.WriteFile(fmt.Sprintf("%s/%s/%s", repo.Core.Workdir(), dirName, f), []byte{}, 0644)
+					base := path.Base(dirname)
+					file = fmt.Sprintf("%s/%s", dirname, f)
+					newFiles[fmt.Sprintf("%s/%s", base, f)] = struct{}{}
+					err = ioutil.WriteFile(file, []byte{}, os.ModePerm)
 				} else {
-					err = ioutil.WriteFile(fmt.Sprintf("%s/%s", repo.Core.Workdir(), f), []byte{}, 0644)
+					file = fmt.Sprintf("%s/%s", workdir, f)
+					newFiles[f] = struct{}{}
+					err = ioutil.WriteFile(file, []byte{}, os.ModePerm)
 				}
 
 				if err != nil {
@@ -105,6 +117,51 @@ func TestCommitCmd(t *testing.T) {
 			tree, err := repo.Core.LookupTree(commit.TreeId())
 			if err != nil {
 				t.Fatal(err)
+			}
+
+			commits, err := repo.Commits()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(commits) == 0 {
+				t.Fatal(errors.New("commit was not recorded to repository"))
+			}
+
+			if commit.Id().String() != commits[0].Id().String() {
+				t.Fatal(errors.New("commit head does not match commits"))
+			}
+
+			if len(commits) > 1 {
+				parentTree, err := commits[1].Tree()
+				if err != nil {
+					t.Fatal(err)
+				}
+				diff, err := repo.Core.DiffTreeToTree(parentTree, tree, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				raw, err := diff.ToBuf(lib.DiffFormatNameOnly)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				scanner := bufio.NewScanner(bytes.NewReader(raw))
+				var includedFiles []string
+				for scanner.Scan() {
+					includedFiles = append(includedFiles, scanner.Text())
+				}
+
+				if len(includedFiles) != len(newFiles) {
+					t.Fatal(errors.New("new files do not match diff of commit"))
+				}
+
+				for _, f := range includedFiles {
+					if _, ok := newFiles[f]; !ok {
+						t.Fatal(errors.New("diff file does not match new file"))
+					}
+				}
 			}
 
 			if tree.EntryCount() < 1 {

@@ -175,11 +175,27 @@ func (r *Repository) createCommit(treeID *lib.Oid, commit *lib.Commit, msg strin
 	}
 
 	if commit != nil {
-		return r.Core.CreateCommit("HEAD", sig, sig, string(msg), tree, commit)
+		id, err = r.Core.CreateCommit("HEAD", sig, sig, string(msg), tree, commit)
+		if err != nil {
+			return
+		}
+		err = r.Core.CheckoutHead(&lib.CheckoutOpts{
+			Strategy: lib.CheckoutSafe | lib.CheckoutRecreateMissing,
+		})
+		return
 	}
 
 	// Initial commit
-	return r.Core.CreateCommit("HEAD", sig, sig, string(msg), tree)
+	id, err = r.Core.CreateCommit("HEAD", sig, sig, string(msg), tree)
+	if err != nil {
+		return
+	}
+
+	err = r.Core.CheckoutHead(&lib.CheckoutOpts{
+		Strategy: lib.CheckoutSafe | lib.CheckoutRecreateMissing,
+	})
+
+	return
 }
 
 func (r *Repository) Commit(treeID *lib.Oid, msg string) (commitID *lib.Oid, err error) {
@@ -221,6 +237,45 @@ func (r *Repository) References() ([]string, error) {
 	}
 
 	return list, err
+}
+
+func (r *Repository) Commits() (commits []*lib.Commit, err error) {
+	unborn, err := r.Core.IsHeadUnborn()
+	if err != nil {
+		return
+	}
+
+	if unborn {
+		err = errors.New("no existing commits")
+		return
+	}
+
+	head, err := r.Core.Head()
+	if err != nil {
+		return
+	}
+	defer head.Free()
+
+	headCommit, err := r.Core.LookupCommit(head.Target())
+	if err != nil {
+		return
+	}
+	defer headCommit.Free()
+
+	commits = append(commits, headCommit)
+
+	if headCommit.ParentCount() != 0 {
+		parent := headCommit.Parent(0)
+		defer parent.Free()
+		commits = append(commits, parent)
+
+		for parent.ParentCount() != 0 {
+			parent = parent.Parent(0)
+			defer parent.Free()
+			commits = append(commits, parent)
+		}
+	}
+	return
 }
 
 // TODO get signature from git configuration
