@@ -3,9 +3,7 @@ package cmd
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -63,12 +61,6 @@ func TestCloneCmd(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-
-			files, err := filepath.Glob("*")
-			if err != nil {
-				log.Fatal(err)
-			}
-			fmt.Println(files)
 
 			if _, err := os.Stat(clone); err != nil {
 				if os.IsNotExist(err) {
