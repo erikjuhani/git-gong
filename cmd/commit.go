@@ -13,7 +13,6 @@ func init() {
 }
 
 var (
-	repo      *git.Repository
 	stageOnly bool
 	commitMsg string
 )
