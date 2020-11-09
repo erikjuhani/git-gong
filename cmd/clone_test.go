@@ -1,25 +1,38 @@
 package cmd
 
 import (
+	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
 func TestCloneCmd(t *testing.T) {
+	r, err := createTestRepo()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanupTestRepo(r)
+
+	parts := strings.Split(r.Core.Path(), "/")
+	repoName := fmt.Sprintf("%s/%s", parts[len(parts)-3], strings.TrimSuffix(parts[len(parts)-1], ".git"))
+
 	tests := []struct {
 		name, repository, url, directory string
 	}{
 		{
 			name:       "should create a clone of a repository into a newly created directory named after the repository",
-			repository: "git-gong",
-			url:        "https://github.com/erikjuhani/git-gong.git",
+			repository: repoName,
+			url:        r.Core.Path(),
 			directory:  "",
 		},
 		{
 			name:       "should create a clone of a repository into a directory",
-			repository: "git-gong",
-			url:        "https://github.com/erikjuhani/git-gong.git",
+			repository: repoName,
+			url:        r.Core.Path(),
 			directory:  "gong-git",
 		},
 	}
@@ -50,6 +63,12 @@ func TestCloneCmd(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
+			files, err := filepath.Glob("*")
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Println(files)
 
 			if _, err := os.Stat(clone); err != nil {
 				if os.IsNotExist(err) {

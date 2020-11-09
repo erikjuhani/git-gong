@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"strings"
 
@@ -29,19 +28,14 @@ var cloneCmd = &cobra.Command{
 			return err
 		}
 
-		gitURL, err := url.Parse(args[0])
-		if err != nil {
-			return err
-		}
-
 		if len(args) > 1 {
 			path = fmt.Sprintf("%s/%s", path, args[1])
 		} else {
-			parts := strings.Split(gitURL.String(), "/")
-			path = fmt.Sprintf("%s/%s", path, strings.TrimSuffix(parts[len(parts)-1], ".git"))
+			parts := strings.Split(args[0], "/")
+			path = fmt.Sprintf("%s/%s", parts[len(parts)-3], strings.TrimSuffix(parts[len(parts)-1], ".git"))
 		}
 
-		return cloneRepository(gitURL.String(), path)
+		return cloneRepository(args[0], path)
 	},
 }
 
