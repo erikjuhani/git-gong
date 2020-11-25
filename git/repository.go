@@ -18,8 +18,9 @@ func emptyString(str string) bool {
 }
 
 type Repository struct {
-	Core  *lib.Repository
-	index *lib.Index
+	Core   *lib.Repository
+	index  *lib.Index
+	unborn bool
 }
 
 var (
@@ -57,9 +58,15 @@ func Init(path string, bare bool, initialReference string) (repo *Repository, er
 		return
 	}
 
+	unborn, err := gitRepo.IsHeadUnborn()
+	if err != nil {
+		return
+	}
+
 	repo = &Repository{
-		Core:  gitRepo,
-		index: idx,
+		Core:   gitRepo,
+		index:  idx,
+		unborn: unborn,
 	}
 
 	return
@@ -81,9 +88,28 @@ func Open() (repo *Repository, err error) {
 		return
 	}
 
+	unborn, err := gitRepo.IsHeadUnborn()
+	if err != nil {
+		return
+	}
+
 	repo = &Repository{
-		Core:  gitRepo,
-		index: idx,
+		Core:   gitRepo,
+		index:  idx,
+		unborn: unborn,
+	}
+
+	return
+}
+
+func (r *Repository) Head() (head *lib.Reference, err error) {
+	if r.unborn {
+		return nil, errors.New("head is unborn")
+	}
+
+	head, err = r.Core.Head()
+	if err != nil {
+		return
 	}
 
 	return
@@ -199,17 +225,17 @@ func (r *Repository) createCommit(treeID *lib.Oid, commit *lib.Commit, msg strin
 }
 
 func (r *Repository) Commit(treeID *lib.Oid, msg string) (commitID *lib.Oid, err error) {
-	unborn, err := r.Core.IsHeadUnborn()
-	if err != nil {
-		return
-	}
-
-	if unborn {
+	if r.unborn {
 		commitID, err = r.createCommit(treeID, nil, msg)
+		if err != nil {
+			return
+		}
+
+		r.unborn = false
 		return
 	}
 
-	head, err := r.Core.Head()
+	head, err := r.Head()
 	if err != nil {
 		return
 	}
@@ -276,6 +302,28 @@ func (r *Repository) Commits() (commits []*lib.Commit, err error) {
 		}
 	}
 	return
+}
+
+func (r *Repository) CreateLocalBranch(branchName string) (branch *lib.Branch, err error) {
+	head, err := r.Head()
+
+	// Check if branch already exists
+	localBranch, err := r.Core.LookupBranch(branchName, lib.BranchLocal)
+	if err != nil {
+		return
+	}
+
+	// Branch already exists return existing branch and an error stating branch already exists.
+	if localBranch != nil {
+		return localBranch, errors.New("branch already exists")
+	}
+
+	commit, err := r.Core.LookupCommit(head.Target())
+	if err != nil {
+		return
+	}
+
+	return r.Core.CreateBranch(branchName, commit, false)
 }
 
 // TODO get signature from git configuration
