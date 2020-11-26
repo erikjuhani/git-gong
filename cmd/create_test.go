@@ -34,6 +34,11 @@ func TestCreateBranchCmd(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	_, err = seedRepo(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	defer cleanupTestRepo(repo)
 
 	workdir := repo.Core.Workdir()
@@ -105,7 +110,52 @@ func TestCreateFileCmd(t *testing.T) {
 
 			filepath := fmt.Sprintf("%s%s", workdir, tt.args[0])
 
-			if _, err := os.Stat(filepath); err != nil {
+			if _, err := os.Stat(filepath); os.IsNotExist(err) {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestCreateDirectoryCmd(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: `Command gong create directory <dirname>. Should create a new directory <dirname>`,
+			args: []string{"gong-folder"},
+		},
+	}
+	repo, err := createTestRepo()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer cleanupTestRepo(repo)
+
+	workdir := repo.Core.Workdir()
+
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := []string{createCmd.Name(), createDirectoryCmd.Name()}
+			args = append(args, tt.args...)
+
+			rootCmd.SetArgs(args)
+
+			err = rootCmd.Execute()
+
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			dirpath := fmt.Sprintf("%s%s", workdir, tt.args[0])
+
+			if _, err := os.Stat(dirpath); os.IsNotExist(err) {
 				t.Fatal(err)
 			}
 		})
@@ -128,6 +178,11 @@ func TestCreateTagCmd(t *testing.T) {
 	}
 
 	defer cleanupTestRepo(repo)
+
+	_, err = seedRepo(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	workdir := repo.Core.Workdir()
 

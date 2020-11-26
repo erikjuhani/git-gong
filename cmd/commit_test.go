@@ -23,6 +23,24 @@ func createTestRepo() (*git.Repository, error) {
 	return git.Init(path, false, "")
 }
 
+func seedRepo(repo *git.Repository) (commidID *lib.Oid, err error) {
+	files := []string{"README.md", "gongo-bongo.go"}
+
+	for _, f := range files {
+		path := fmt.Sprintf("%s/%s", repo.Core.Workdir(), f)
+		if err = ioutil.WriteFile(path, []byte("temp\n"), 0644); err != nil {
+			return
+		}
+	}
+
+	treeID, err := repo.AddToIndex(files)
+	if err != nil {
+		return
+	}
+
+	return repo.Commit(treeID, commitMsg)
+}
+
 func cleanupTestRepo(r *git.Repository) {
 	if err := os.RemoveAll(r.Core.Workdir()); err != nil {
 		panic(err)

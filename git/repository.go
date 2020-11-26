@@ -231,7 +231,6 @@ func (r *Repository) Commit(treeID *lib.Oid, msg string) (commitID *lib.Oid, err
 			return
 		}
 
-		r.unborn = false
 		return
 	}
 
@@ -276,7 +275,7 @@ func (r *Repository) Commits() (commits []*lib.Commit, err error) {
 		return
 	}
 
-	head, err := r.Core.Head()
+	head, err := r.Head()
 	if err != nil {
 		return
 	}
@@ -304,18 +303,37 @@ func (r *Repository) Commits() (commits []*lib.Commit, err error) {
 	return
 }
 
+func (r *Repository) CreateTag(tagname string, message string) (tag *lib.Oid, err error) {
+	head, err := r.Head()
+	if err != nil {
+		return
+	}
+	defer head.Free()
+
+	headCommit, err := r.Core.LookupCommit(head.Target())
+	if err != nil {
+		return
+	}
+	defer headCommit.Free()
+
+	return r.Core.Tags.Create(tagname, headCommit, signature(), message)
+}
+
 func (r *Repository) CreateLocalBranch(branchName string) (branch *lib.Branch, err error) {
 	head, err := r.Head()
+	if err != nil {
+		return
+	}
 
 	// Check if branch already exists
 	localBranch, err := r.Core.LookupBranch(branchName, lib.BranchLocal)
-	if err != nil {
+	if localBranch != nil && err != nil {
 		return
 	}
 
 	// Branch already exists return existing branch and an error stating branch already exists.
 	if localBranch != nil {
-		return localBranch, errors.New("branch already exists")
+		return localBranch, fmt.Errorf("branch %s already exists", branchName)
 	}
 
 	commit, err := r.Core.LookupCommit(head.Target())
