@@ -97,6 +97,26 @@ var createReleaseCmd = &cobra.Command{
 	Short: "Creates a release / tag.",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
+		repo, err := git.Open()
+		if err != nil {
+			return
+		}
+
+		defer repo.Free()
+
+		message := ""
+
+		if len(args) > 1 {
+			message = args[1]
+		}
+
+		tag, err := repo.CreateTag(args[0], message)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		fmt.Println(tag.String())
 	},
 }
 

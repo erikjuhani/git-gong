@@ -232,6 +232,11 @@ func TestCreateReleaseCmd(t *testing.T) {
 
 	defer cleanupTestRepo(repo)
 
+	_, err = seedRepo(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	workdir := repo.Core.Workdir()
 
 	if err := os.Chdir(workdir); err != nil {

@@ -122,7 +122,7 @@ func TestCommitCmd(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			head, err := repo.Core.Head()
+			head, err := repo.Head()
 			if err != nil {
 				t.Fatal(err)
 			}

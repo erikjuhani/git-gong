@@ -103,7 +103,12 @@ func Open() (repo *Repository, err error) {
 }
 
 func (r *Repository) Head() (head *lib.Reference, err error) {
-	if r.unborn {
+	unborn, err := r.Core.IsHeadUnborn()
+	if err != nil {
+		return
+	}
+
+	if unborn {
 		return nil, errors.New("head is unborn")
 	}
 
@@ -196,7 +201,7 @@ func (r *Repository) createCommit(treeID *lib.Oid, commit *lib.Commit, msg strin
 	}
 
 	if emptyString(msg) {
-		err = errors.New("Aborting due to empty commit message")
+		err = errors.New("aborting due to empty commit message")
 		return
 	}
 
@@ -205,6 +210,7 @@ func (r *Repository) createCommit(treeID *lib.Oid, commit *lib.Commit, msg strin
 		if err != nil {
 			return
 		}
+
 		err = r.Core.CheckoutHead(&lib.CheckoutOpts{
 			Strategy: lib.CheckoutSafe | lib.CheckoutRecreateMissing,
 		})
@@ -216,6 +222,8 @@ func (r *Repository) createCommit(treeID *lib.Oid, commit *lib.Commit, msg strin
 	if err != nil {
 		return
 	}
+
+	r.unborn = false
 
 	err = r.Core.CheckoutHead(&lib.CheckoutOpts{
 		Strategy: lib.CheckoutSafe | lib.CheckoutRecreateMissing,
@@ -264,17 +272,11 @@ func (r *Repository) References() ([]string, error) {
 	return list, err
 }
 
+func (r *Repository) Unborn() bool {
+	return r.unborn
+}
+
 func (r *Repository) Commits() (commits []*lib.Commit, err error) {
-	unborn, err := r.Core.IsHeadUnborn()
-	if err != nil {
-		return
-	}
-
-	if unborn {
-		err = errors.New("no existing commits")
-		return
-	}
-
 	head, err := r.Head()
 	if err != nil {
 		return
