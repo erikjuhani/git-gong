@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"testing"
 
@@ -30,6 +31,11 @@ func TestSwitchBranchCmd(t *testing.T) {
 
 	_, err = seedRepo(repo)
 	if err != nil {
+		t.Fatal(err)
+	}
+
+	path := fmt.Sprintf("%s/%s", repo.Core.Workdir(), "stash.me")
+	if err = ioutil.WriteFile(path, []byte("---i-am-untracked-and-i-shall-be-stashed---\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 

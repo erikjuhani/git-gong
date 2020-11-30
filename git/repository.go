@@ -6,10 +6,16 @@ import (
 	"gong/cli"
 	"io/ioutil"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
 	lib "github.com/libgit2/git2go/v30"
+)
+
+const (
+	stashPattern = "@%s"
+	headRef      = "refs/heads/"
 )
 
 // TODO: Move this somewhere more appropriate
@@ -18,9 +24,8 @@ func emptyString(str string) bool {
 }
 
 type Repository struct {
-	Core   *lib.Repository
-	index  *lib.Index
-	unborn bool
+	Core  *lib.Repository
+	index *lib.Index
 }
 
 var (
@@ -47,7 +52,7 @@ func Init(path string, bare bool, initialReference string) (repo *Repository, er
 		initialReference = DefaultReference
 	}
 
-	initRef := fmt.Sprintf("refs/heads/%s", initialReference)
+	initRef := fmt.Sprintf("%s%s", headRef, initialReference)
 	err = ioutil.WriteFile(fmt.Sprintf("%s/HEAD", gitRepo.Path()), []byte("ref: "+initRef), 0644)
 	if err != nil {
 		return
@@ -58,17 +63,121 @@ func Init(path string, bare bool, initialReference string) (repo *Repository, er
 		return
 	}
 
-	unborn, err := gitRepo.IsHeadUnborn()
+	repo = &Repository{
+		Core:  gitRepo,
+		index: idx,
+	}
+
+	return
+}
+
+func (r *Repository) StashAmount() (amount uint) {
+	r.Core.Stashes.Foreach(func(index int, message string, id *lib.Oid) error {
+		amount++
+		return nil
+	})
+
+	return
+}
+
+func (r *Repository) CurrentBranch() (branch *lib.Branch, err error) {
+	head, err := r.Head()
 	if err != nil {
 		return
 	}
 
-	repo = &Repository{
-		Core:   gitRepo,
-		index:  idx,
-		unborn: unborn,
+	return head.Branch(), nil
+}
+
+func (r *Repository) HeadCommit() (commit *lib.Commit, err error) {
+	head, err := r.Head()
+	if err != nil {
+		return
+	}
+	defer head.Free()
+
+	return r.Core.LookupCommit(head.Target())
+}
+
+func (r *Repository) CreateStash() (stash *lib.Oid, err error) {
+	currentBranch, err := r.CurrentBranch()
+	if err != nil {
+		return
 	}
 
+	currentBranchName, err := currentBranch.Name()
+	if err != nil {
+		return
+	}
+
+	stashName := fmt.Sprintf(stashPattern, currentBranchName)
+
+	r.Core.Stashes.Save(signature(), stashName, lib.StashIncludeUntracked)
+
+	return
+}
+
+func (r *Repository) PopStash(branchName string) error {
+	re := regexp.MustCompile(`@[\w-]+`)
+
+	return r.Core.Stashes.Foreach(func(index int, message string, id *lib.Oid) error {
+		if branchName == strings.Trim(re.FindString(message), "@") {
+			opts, err := lib.DefaultStashApplyOptions()
+			if err != nil {
+				return err
+			}
+
+			return r.Core.Stashes.Pop(index, opts)
+		}
+
+		return nil
+	})
+}
+
+func (r *Repository) CheckoutBranch(branchName string) (branch *lib.Branch, err error) {
+	branch, err = r.Core.LookupBranch(branchName, lib.BranchLocal)
+
+	// Branch does not exist, create it first
+	if branch == nil || err != nil {
+		branch, err = r.CreateLocalBranch(branchName)
+	}
+
+	defer branch.Free()
+
+	_, err = r.CreateStash()
+	if err != nil {
+		return
+	}
+
+	checkoutOpts := &lib.CheckoutOpts{
+		Strategy: lib.CheckoutSafe | lib.CheckoutRecreateMissing | lib.CheckoutAllowConflicts | lib.CheckoutUseTheirs,
+	}
+
+	localCommit, err := r.Core.LookupCommit(branch.Target())
+	if err != nil {
+		return
+	}
+
+	defer localCommit.Free()
+
+	tree, err := r.Core.LookupTree(localCommit.TreeId())
+	if err != nil {
+		return
+	}
+
+	defer tree.Free()
+
+	err = r.Core.CheckoutTree(tree, checkoutOpts)
+	if err != nil {
+		return
+	}
+
+	err = r.Core.SetHead(fmt.Sprintf("%s%s", headRef, branchName))
+	if err != nil {
+		return
+	}
+
+	err = r.PopStash(branchName)
 	return
 }
 
@@ -88,15 +197,9 @@ func Open() (repo *Repository, err error) {
 		return
 	}
 
-	unborn, err := gitRepo.IsHeadUnborn()
-	if err != nil {
-		return
-	}
-
 	repo = &Repository{
-		Core:   gitRepo,
-		index:  idx,
-		unborn: unborn,
+		Core:  gitRepo,
+		index: idx,
 	}
 
 	return
@@ -223,8 +326,6 @@ func (r *Repository) createCommit(treeID *lib.Oid, commit *lib.Commit, msg strin
 		return
 	}
 
-	r.unborn = false
-
 	err = r.Core.CheckoutHead(&lib.CheckoutOpts{
 		Strategy: lib.CheckoutSafe | lib.CheckoutRecreateMissing,
 	})
@@ -233,7 +334,12 @@ func (r *Repository) createCommit(treeID *lib.Oid, commit *lib.Commit, msg strin
 }
 
 func (r *Repository) Commit(treeID *lib.Oid, msg string) (commitID *lib.Oid, err error) {
-	if r.unborn {
+	unborn, err := r.Core.IsHeadUnborn()
+	if err != nil {
+		return
+	}
+
+	if unborn {
 		commitID, err = r.createCommit(treeID, nil, msg)
 		if err != nil {
 			return
@@ -270,10 +376,6 @@ func (r *Repository) References() ([]string, error) {
 	}
 
 	return list, err
-}
-
-func (r *Repository) Unborn() bool {
-	return r.unborn
 }
 
 func (r *Repository) Commits() (commits []*lib.Commit, err error) {

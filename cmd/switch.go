@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"fmt"
+	"gong/git"
+
 	"github.com/spf13/cobra"
 )
 
@@ -33,6 +36,20 @@ var switchBranchCmd = &cobra.Command{
 	`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		repo, err := git.Open()
+		if err != nil {
+			return
+		}
+
+		defer repo.Free()
+
+		_, err = repo.CheckoutBranch(args[0])
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		fmt.Printf("checkout to branch %s\n", args[0])
 	},
 }
 
