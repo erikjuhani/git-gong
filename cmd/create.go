@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"gong/git"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 )
@@ -59,12 +60,12 @@ var createBranchCmd = &cobra.Command{
 
 var createFileCmd = &cobra.Command{
 	Use:   "file [filename]",
-	Short: "Creates a regular file.",
+	Short: "Creates a regular file",
 	Long:  ``,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		file := args[0]
-		if err := os.MkdirAll(file, os.ModePerm); err != nil {
+		if err := os.MkdirAll(filepath.Dir(file), os.ModePerm); err != nil {
 			fmt.Println(err)
 		}
 
@@ -79,7 +80,7 @@ var createFileCmd = &cobra.Command{
 
 var createDirectoryCmd = &cobra.Command{
 	Use:   "directory [dirname]",
-	Short: "Creates a directory.",
+	Short: "Creates a directory",
 	Long:  ``,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -94,7 +95,7 @@ var createDirectoryCmd = &cobra.Command{
 
 var createReleaseCmd = &cobra.Command{
 	Use:   "release [releasename]",
-	Short: "Creates a release / tag.",
+	Short: "Creates a release / tag",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		repo, err := git.Open()
@@ -110,19 +111,25 @@ var createReleaseCmd = &cobra.Command{
 			message = args[1]
 		}
 
-		tag, err := repo.CreateTag(args[0], message)
+		tagID, err := repo.CreateTag(args[0], message)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
 
-		fmt.Println(tag.String())
+		tag, err := repo.Core.LookupTag(tagID)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		fmt.Printf("created a new tag %s\n", tag.Name())
 	},
 }
 
 var createTagCmd = &cobra.Command{
 	Use:   "tag [tagname]",
-	Short: "Creates a tag / release.",
+	Short: "Creates a tag / release",
 	Long:  ``,
 	Args:  cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -139,12 +146,18 @@ var createTagCmd = &cobra.Command{
 			message = args[1]
 		}
 
-		tag, err := repo.CreateTag(args[0], message)
+		tagID, err := repo.CreateTag(args[0], message)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
 
-		fmt.Println(tag.String())
+		tag, err := repo.Core.LookupTag(tagID)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		fmt.Printf("created a new release %s\n", tag.Name())
 	},
 }

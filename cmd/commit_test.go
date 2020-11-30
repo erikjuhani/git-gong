@@ -23,8 +23,10 @@ func createTestRepo() (*git.Repository, error) {
 	return git.Init(path, false, "")
 }
 
-func seedRepo(repo *git.Repository) (commidID *lib.Oid, err error) {
-	files := []string{"README.md", "gongo-bongo.go"}
+func seedRepo(repo *git.Repository, files ...string) (commidID *lib.Oid, err error) {
+	if len(files) == 0 {
+		files = []string{"README.md", "gongo-bongo.go"}
+	}
 
 	for _, f := range files {
 		path := fmt.Sprintf("%s/%s", repo.Core.Workdir(), f)
