@@ -134,7 +134,133 @@ func (r *Repository) PopStash(branchName string) error {
 	})
 }
 
+func (r *Repository) Tags() (tags []*lib.Tag, err error) {
+	err = r.Core.Tags.Foreach(func(name string, id *lib.Oid) error {
+		ref, err := r.Core.References.Lookup(name)
+		if err != nil {
+			return err
+		}
+
+		if ref.IsTag() {
+			tagObj, err := ref.Peel(lib.ObjectTag)
+			if err != nil {
+				return err
+			}
+
+			tag, err := tagObj.AsTag()
+			if err != nil {
+				return err
+			}
+
+			tags = append(tags, tag)
+		}
+
+		return nil
+	})
+
+	return
+}
+
+func (r *Repository) CheckoutTag(tagName string) (tag *lib.Tag, err error) {
+	checkoutOpts := &lib.CheckoutOpts{
+		Strategy: lib.CheckoutSafe | lib.CheckoutRecreateMissing | lib.CheckoutAllowConflicts | lib.CheckoutUseTheirs,
+	}
+
+	tags, err := r.Tags()
+	if err != nil {
+		return
+	}
+
+	for _, tag = range tags {
+		if tag.Name() == tagName {
+			break
+		}
+	}
+
+	if tag == nil {
+		return nil, fmt.Errorf("no tag found by tag name %s", tagName)
+	}
+
+	defer tag.Free()
+
+	commit, err := r.Core.LookupCommit(tag.TargetId())
+
+	tree, err := commit.Tree()
+	if err != nil {
+		return
+	}
+
+	defer tree.Free()
+
+	err = r.Core.CheckoutTree(tree, checkoutOpts)
+	if err != nil {
+		return
+	}
+
+	err = r.Core.SetHeadDetached(commit.Id())
+	return
+}
+
+func (r *Repository) CheckoutCommit(hash string) (commit *lib.Commit, err error) {
+	checkoutOpts := &lib.CheckoutOpts{
+		Strategy: lib.CheckoutSafe | lib.CheckoutRecreateMissing | lib.CheckoutAllowConflicts | lib.CheckoutUseTheirs,
+	}
+
+	commits, err := r.Commits()
+	if err != nil {
+		return
+	}
+
+	for _, commit = range commits {
+		if commit.Id().String() == hash {
+			break
+		}
+	}
+
+	if commit == nil {
+		return nil, fmt.Errorf("no commit found by hash %s", hash)
+	}
+
+	defer commit.Free()
+
+	tree, err := commit.Tree()
+	if err != nil {
+		return
+	}
+
+	defer tree.Free()
+
+	err = r.Core.CheckoutTree(tree, checkoutOpts)
+	if err != nil {
+		return
+	}
+
+	err = r.Core.SetHeadDetached(commit.Id())
+
+	return
+}
+
 func (r *Repository) CheckoutBranch(branchName string) (branch *lib.Branch, err error) {
+	detached, err := r.Core.IsHeadDetached()
+	if err != nil {
+		return
+	}
+
+	if detached {
+		ref, err := r.Core.References.Lookup("refs/heads/" + branchName)
+		if err != nil {
+			return nil, err
+		}
+
+		r.Core.SetHead(ref.Name())
+
+		checkoutOpts := &lib.CheckoutOpts{
+			Strategy: lib.CheckoutSafe | lib.CheckoutRecreateMissing | lib.CheckoutAllowConflicts | lib.CheckoutUseTheirs,
+		}
+
+		r.Core.CheckoutHead(checkoutOpts)
+	}
+
 	branch, err = r.Core.LookupBranch(branchName, lib.BranchLocal)
 
 	// Branch does not exist, create it first

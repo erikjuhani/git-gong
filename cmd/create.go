@@ -123,7 +123,7 @@ var createReleaseCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Printf("created a new tag %s\n", tag.Name())
+		fmt.Printf("created a new release %s\n", tag.Name())
 	},
 }
 
@@ -158,6 +158,6 @@ var createTagCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Printf("created a new release %s\n", tag.Name())
+		fmt.Printf("created a new tag %s\n", tag.Name())
 	},
 }

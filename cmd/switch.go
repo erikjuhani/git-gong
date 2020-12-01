@@ -59,6 +59,18 @@ var switchCommitCmd = &cobra.Command{
 	Long:  ``,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		repo, err := git.Open()
+		if err != nil {
+			return
+		}
+
+		defer repo.Free()
+
+		_, err = repo.CheckoutCommit(args[0])
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 	},
 }
 
@@ -68,6 +80,20 @@ var switchTagCmd = &cobra.Command{
 	Long:  ``,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		repo, err := git.Open()
+		if err != nil {
+			return
+		}
+
+		defer repo.Free()
+
+		tag, err := repo.CheckoutTag(args[0])
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		fmt.Printf("checkout to tag %s\n", tag.Name())
 	},
 }
 
@@ -77,5 +103,19 @@ var switchReleaseCmd = &cobra.Command{
 	Long:  ``,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		repo, err := git.Open()
+		if err != nil {
+			return
+		}
+
+		defer repo.Free()
+
+		tag, err := repo.CheckoutTag(args[0])
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		fmt.Printf("checkout to release %s\n", tag.Name())
 	},
 }
