@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	lib "github.com/libgit2/git2go/v30"
+	lib "github.com/libgit2/git2go/v31"
 )
 
 const (

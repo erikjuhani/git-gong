@@ -11,7 +11,7 @@ import (
 	"path"
 	"testing"
 
-	lib "github.com/libgit2/git2go/v30"
+	lib "github.com/libgit2/git2go/v31"
 )
 
 func createTestRepo() (*git.Repository, error) {

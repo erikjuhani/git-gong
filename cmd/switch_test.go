@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	lib "github.com/libgit2/git2go/v30"
+	lib "github.com/libgit2/git2go/v31"
 )
 
 func TestSwitchBranchCmd(t *testing.T) {
