@@ -5,25 +5,25 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"gong/git"
 	"io/ioutil"
 	"os"
 	"path"
 	"testing"
 
+	"github.com/erikjuhani/git-gong/gong"
 	lib "github.com/libgit2/git2go/v31"
 )
 
-func createTestRepo() (*git.Repository, error) {
+func createTestRepo() (*gong.Repository, error) {
 	path, err := ioutil.TempDir("", "gong")
 	if err != nil {
 		return nil, err
 	}
 
-	return git.Init(path, false, "")
+	return gong.Init(path, false, "")
 }
 
-func seedRepo(repo *git.Repository, files ...string) (commidID *lib.Oid, err error) {
+func seedRepo(repo *gong.Repository, files ...string) (commidID *lib.Oid, err error) {
 	if len(files) == 0 {
 		files = []string{"README.md", "gongo-bongo.go"}
 	}
@@ -43,11 +43,11 @@ func seedRepo(repo *git.Repository, files ...string) (commidID *lib.Oid, err err
 	return repo.Commit(treeID, commitMsg)
 }
 
-func cleanupTestRepo(r *git.Repository) {
+func cleanupTestRepo(r *gong.Repository) {
 	if err := os.RemoveAll(r.Core.Workdir()); err != nil {
 		panic(err)
 	}
-	r.Core.Free()
+	defer r.Core.Free()
 }
 
 func TestCommitCmd(t *testing.T) {

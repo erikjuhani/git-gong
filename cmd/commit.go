@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"fmt"
-	"gong/git"
-
+	"github.com/erikjuhani/git-gong/gong"
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +26,8 @@ var commitCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		err := commit(args)
 		if err != nil {
-			fmt.Println(err)
+			cmd.PrintErr(err)
+			return
 		}
 	},
 }
@@ -45,7 +44,7 @@ func commitFlags() {
 }
 
 func commit(paths []string) (err error) {
-	repo, err := git.Open()
+	repo, err := gong.Open()
 	if err != nil {
 		return
 	}

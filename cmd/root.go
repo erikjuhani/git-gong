@@ -2,9 +2,9 @@ package cmd
 
 import (
 	"fmt"
-	"gong/doc"
 	"os"
 
+	"github.com/erikjuhani/git-gong/doc"
 	"github.com/spf13/cobra"
 )
 

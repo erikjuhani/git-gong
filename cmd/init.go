@@ -1,10 +1,9 @@
 package cmd
 
 import (
-	"fmt"
-	"gong/git"
 	"os"
 
+	"github.com/erikjuhani/git-gong/gong"
 	"github.com/spf13/cobra"
 )
 
@@ -32,7 +31,8 @@ var initCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		path, err := os.Getwd()
 		if err != nil {
-			fmt.Println(err)
+			cmd.PrintErr(err)
+			return
 		}
 
 		if len(args) == 1 {
@@ -41,20 +41,21 @@ var initCmd = &cobra.Command{
 
 		err = initRepository(path)
 		if err != nil {
-			fmt.Println(err)
+			cmd.PrintErr(err)
+			return
 		}
 	},
 }
 
 func initFlags() {
 	initCmd.Flags().StringVarP(
-		&defaultBranch, "default-branch", "d", git.DefaultReference,
+		&defaultBranch, "default-branch", "d", gong.DefaultReference,
 		"Use specified name for the default branch, when creating a new repository.",
 	)
 }
 
 func initRepository(path string) error {
-	repo, err := git.Init(path, bare, defaultBranch)
+	repo, err := gong.Init(path, bare, defaultBranch)
 	defer repo.Free()
 	return err
 }

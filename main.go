@@ -1,6 +1,6 @@
 package main
 
-import "gong/cmd"
+import "github.com/erikjuhani/git-gong/cmd"
 
 func main() {
 	cmd.Execute()

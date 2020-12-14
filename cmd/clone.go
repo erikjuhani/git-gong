@@ -25,6 +25,7 @@ var cloneCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path, err := os.Getwd()
 		if err != nil {
+			cmd.PrintErr(err)
 			return err
 		}
 

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"testing"
@@ -54,8 +55,10 @@ func TestCreateBranchCmd(t *testing.T) {
 
 			rootCmd.SetArgs(args)
 
-			err = rootCmd.Execute()
+			// Eat up the output
+			rootCmd.SetOut(bytes.NewBuffer(nil))
 
+			err = rootCmd.Execute()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -102,8 +105,10 @@ func TestCreateFileCmd(t *testing.T) {
 
 			rootCmd.SetArgs(args)
 
-			err = rootCmd.Execute()
+			// Eat up the output
+			rootCmd.SetOut(bytes.NewBuffer(nil))
 
+			err = rootCmd.Execute()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -147,8 +152,10 @@ func TestCreateDirectoryCmd(t *testing.T) {
 
 			rootCmd.SetArgs(args)
 
-			err = rootCmd.Execute()
+			// Eat up the output
+			rootCmd.SetOut(bytes.NewBuffer(nil))
 
+			err = rootCmd.Execute()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -197,8 +204,10 @@ func TestCreateTagCmd(t *testing.T) {
 
 			rootCmd.SetArgs(args)
 
-			err = rootCmd.Execute()
+			// Eat up the output
+			rootCmd.SetOut(bytes.NewBuffer(nil))
 
+			err = rootCmd.Execute()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -250,8 +259,10 @@ func TestCreateReleaseCmd(t *testing.T) {
 
 			rootCmd.SetArgs(args)
 
-			err = rootCmd.Execute()
+			// Eat up the output
+			rootCmd.SetOut(bytes.NewBuffer(nil))
 
+			err = rootCmd.Execute()
 			if err != nil {
 				t.Fatal(err)
 			}

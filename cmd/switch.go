@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"fmt"
-	"gong/git"
-
+	"github.com/erikjuhani/git-gong/gong"
 	"github.com/spf13/cobra"
 )
 
@@ -36,8 +34,9 @@ var switchBranchCmd = &cobra.Command{
 	`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		repo, err := git.Open()
+		repo, err := gong.Open()
 		if err != nil {
+			cmd.PrintErr(err)
 			return
 		}
 
@@ -45,11 +44,11 @@ var switchBranchCmd = &cobra.Command{
 
 		_, err = repo.CheckoutBranch(args[0])
 		if err != nil {
-			fmt.Println(err)
+			cmd.PrintErr(err)
 			return
 		}
 
-		fmt.Printf("checkout to branch %s\n", args[0])
+		cmd.Printf("checkout to branch %s\n", args[0])
 	},
 }
 
@@ -59,8 +58,9 @@ var switchCommitCmd = &cobra.Command{
 	Long:  ``,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		repo, err := git.Open()
+		repo, err := gong.Open()
 		if err != nil {
+			cmd.PrintErr(err)
 			return
 		}
 
@@ -68,9 +68,11 @@ var switchCommitCmd = &cobra.Command{
 
 		_, err = repo.CheckoutCommit(args[0])
 		if err != nil {
-			fmt.Println(err)
+			cmd.PrintErr(err)
 			return
 		}
+
+		cmd.Printf("switched to commit %s\n", args[0])
 	},
 }
 
@@ -80,8 +82,9 @@ var switchTagCmd = &cobra.Command{
 	Long:  ``,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		repo, err := git.Open()
+		repo, err := gong.Open()
 		if err != nil {
+			cmd.PrintErr(err)
 			return
 		}
 
@@ -89,11 +92,11 @@ var switchTagCmd = &cobra.Command{
 
 		tag, err := repo.CheckoutTag(args[0])
 		if err != nil {
-			fmt.Println(err)
+			cmd.PrintErr(err)
 			return
 		}
 
-		fmt.Printf("checkout to tag %s\n", tag.Name())
+		cmd.Printf("checkout to tag %s\n", tag.Name())
 	},
 }
 
@@ -103,8 +106,9 @@ var switchReleaseCmd = &cobra.Command{
 	Long:  ``,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		repo, err := git.Open()
+		repo, err := gong.Open()
 		if err != nil {
+			cmd.PrintErr(err)
 			return
 		}
 
@@ -112,10 +116,10 @@ var switchReleaseCmd = &cobra.Command{
 
 		tag, err := repo.CheckoutTag(args[0])
 		if err != nil {
-			fmt.Println(err)
+			cmd.PrintErr(err)
 			return
 		}
 
-		fmt.Printf("checkout to release %s\n", tag.Name())
+		cmd.Printf("checkout to release %s\n", tag.Name())
 	},
 }
