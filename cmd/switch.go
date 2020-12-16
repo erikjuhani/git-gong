@@ -40,8 +40,6 @@ var switchBranchCmd = &cobra.Command{
 			return
 		}
 
-		defer repo.Free()
-
 		_, err = repo.CheckoutBranch(args[0])
 		if err != nil {
 			cmd.PrintErr(err)
@@ -63,8 +61,6 @@ var switchCommitCmd = &cobra.Command{
 			cmd.PrintErr(err)
 			return
 		}
-
-		defer repo.Free()
 
 		_, err = repo.CheckoutCommit(args[0])
 		if err != nil {
@@ -88,15 +84,13 @@ var switchTagCmd = &cobra.Command{
 			return
 		}
 
-		defer repo.Free()
-
 		tag, err := repo.CheckoutTag(args[0])
 		if err != nil {
 			cmd.PrintErr(err)
 			return
 		}
 
-		cmd.Printf("checkout to tag %s\n", tag.Name())
+		cmd.Printf("checkout to tag %s\n", tag.Name)
 	},
 }
 
@@ -112,14 +106,12 @@ var switchReleaseCmd = &cobra.Command{
 			return
 		}
 
-		defer repo.Free()
-
 		tag, err := repo.CheckoutTag(args[0])
 		if err != nil {
 			cmd.PrintErr(err)
 			return
 		}
 
-		cmd.Printf("checkout to release %s\n", tag.Name())
+		cmd.Printf("checkout to release %s\n", tag.Name)
 	},
 }

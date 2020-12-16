@@ -34,14 +34,14 @@ func TestSwitchBranchCmd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	path := fmt.Sprintf("%s/%s", repo.Core.Workdir(), "stash.me")
+	path := fmt.Sprintf("%s/%s", repo.Path, "stash.me")
 	if err = ioutil.WriteFile(path, []byte("---i-am-untracked-and-i-shall-be-stashed---\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
 	defer cleanupTestRepo(repo)
 
-	workdir := repo.Core.Workdir()
+	workdir := repo.Path
 
 	if err := os.Chdir(workdir); err != nil {
 		t.Fatal(err)
@@ -60,7 +60,7 @@ func TestSwitchBranchCmd(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			_, err = repo.Core.LookupBranch(tt.args[0], lib.BranchLocal)
+			_, err = repo.FindBranch(tt.args[0], lib.BranchLocal)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -99,7 +99,7 @@ func TestSwitchCommitCmd(t *testing.T) {
 
 	defer cleanupTestRepo(repo)
 
-	workdir := repo.Core.Workdir()
+	workdir := repo.Path
 
 	if err := os.Chdir(workdir); err != nil {
 		t.Fatal(err)
@@ -117,17 +117,12 @@ func TestSwitchCommitCmd(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			head, err := repo.Head()
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			currentTip, err := repo.Core.LookupCommit(head.Target())
+			currentTip, err := repo.Head.Commit()
 			if err != nil {
 				return
 			}
 
-			currentTipID := currentTip.Id().String()
+			currentTipID := currentTip.ID.String()
 
 			if currentTipID != expectedID {
 				t.Fatal(fmt.Errorf("current tip %s does not equal to expected tip %s", currentTipID, expectedID))
@@ -171,7 +166,7 @@ func TestSwitchTagCmd(t *testing.T) {
 
 	defer cleanupTestRepo(repo)
 
-	workdir := repo.Core.Workdir()
+	workdir := repo.Path
 
 	if err := os.Chdir(workdir); err != nil {
 		t.Fatal(err)
@@ -189,17 +184,12 @@ func TestSwitchTagCmd(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			head, err := repo.Head()
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			currentTip, err := repo.Core.LookupCommit(head.Target())
+			currentTip, err := repo.Head.Commit()
 			if err != nil {
 				return
 			}
 
-			currentTipID := currentTip.Id().String()
+			currentTipID := currentTip.ID.String()
 
 			if currentTipID != expectedID {
 				t.Fatal(fmt.Errorf("current tip %s does not equal to expected tip %s", currentTipID, expectedID))
@@ -243,7 +233,7 @@ func TestSwitchReleaseCmd(t *testing.T) {
 
 	defer cleanupTestRepo(repo)
 
-	workdir := repo.Core.Workdir()
+	workdir := repo.Path
 
 	if err := os.Chdir(workdir); err != nil {
 		t.Fatal(err)
@@ -261,17 +251,12 @@ func TestSwitchReleaseCmd(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			head, err := repo.Head()
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			currentTip, err := repo.Core.LookupCommit(head.Target())
+			currentTip, err := repo.Head.Commit()
 			if err != nil {
 				return
 			}
 
-			currentTipID := currentTip.Id().String()
+			currentTipID := currentTip.ID.String()
 
 			if currentTipID != expectedID {
 				t.Fatal(fmt.Errorf("current tip %s does not equal to expected tip %s", currentTipID, expectedID))

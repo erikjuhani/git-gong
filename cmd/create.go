@@ -40,8 +40,6 @@ var createBranchCmd = &cobra.Command{
 			return
 		}
 
-		defer repo.Free()
-
 		branch, err := repo.CreateLocalBranch(args[0])
 		if err != nil {
 			cmd.PrintErr(err)
@@ -107,27 +105,19 @@ var createReleaseCmd = &cobra.Command{
 			return
 		}
 
-		defer repo.Free()
-
 		message := ""
 
 		if len(args) > 1 {
 			message = args[1]
 		}
 
-		tagID, err := repo.CreateTag(args[0], message)
+		tag, err := repo.CreateTag(args[0], message)
 		if err != nil {
 			cmd.PrintErr(err)
 			return
 		}
 
-		tag, err := repo.Core.LookupTag(tagID)
-		if err != nil {
-			cmd.PrintErr(err)
-			return
-		}
-
-		cmd.Printf("created a new release %s\n", tag.Name())
+		cmd.Printf("created a new release %s\n", tag.Name)
 	},
 }
 
@@ -143,26 +133,18 @@ var createTagCmd = &cobra.Command{
 			return
 		}
 
-		defer repo.Free()
-
 		message := ""
 
 		if len(args) > 1 {
 			message = args[1]
 		}
 
-		tagID, err := repo.CreateTag(args[0], message)
+		tag, err := repo.CreateTag(args[0], message)
 		if err != nil {
 			cmd.PrintErr(err)
 			return
 		}
 
-		tag, err := repo.Core.LookupTag(tagID)
-		if err != nil {
-			cmd.PrintErr(err)
-			return
-		}
-
-		cmd.Printf("created a new tag %s\n", tag.Name())
+		cmd.Printf("created a new tag %s\n", tag.Name)
 	},
 }

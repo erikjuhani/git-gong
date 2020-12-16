@@ -15,7 +15,7 @@ func TestCloneCmd(t *testing.T) {
 	}
 	defer cleanupTestRepo(r)
 
-	parts := strings.Split(r.Core.Path(), "/")
+	parts := strings.Split(r.GitPath, "/")
 	repoName := fmt.Sprintf("%s/%s", parts[len(parts)-3], strings.TrimSuffix(parts[len(parts)-1], ".git"))
 
 	tests := []struct {
@@ -24,13 +24,13 @@ func TestCloneCmd(t *testing.T) {
 		{
 			name:       "should create a clone of a repository into a newly created directory named after the repository",
 			repository: repoName,
-			url:        r.Core.Path(),
+			url:        r.GitPath,
 			directory:  "",
 		},
 		{
 			name:       "should create a clone of a repository into a directory",
 			repository: repoName,
-			url:        r.Core.Path(),
+			url:        r.GitPath,
 			directory:  "gong-git",
 		},
 	}

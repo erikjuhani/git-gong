@@ -55,7 +55,6 @@ func initFlags() {
 }
 
 func initRepository(path string) error {
-	repo, err := gong.Init(path, bare, defaultBranch)
-	defer repo.Free()
+	_, err := gong.Init(path, bare, defaultBranch)
 	return err
 }

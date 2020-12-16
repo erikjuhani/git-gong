@@ -6,12 +6,13 @@ import (
 	"os"
 	"testing"
 
+	"github.com/erikjuhani/git-gong/gong"
 	lib "github.com/libgit2/git2go/v31"
 )
 
-func contains(slice []string, value string) bool {
-	for _, v := range slice {
-		if v == value {
+func contains(tags []*gong.Tag, tagname string) bool {
+	for _, t := range tags {
+		if t.Name == tagname {
 			return true
 		}
 	}
@@ -42,7 +43,7 @@ func TestCreateBranchCmd(t *testing.T) {
 
 	defer cleanupTestRepo(repo)
 
-	workdir := repo.Core.Workdir()
+	workdir := repo.Path
 
 	if err := os.Chdir(workdir); err != nil {
 		t.Fatal(err)
@@ -63,7 +64,7 @@ func TestCreateBranchCmd(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			_, err = repo.Core.LookupBranch(tt.args[0], lib.BranchLocal)
+			_, err = repo.FindBranch(tt.args[0], lib.BranchLocal)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -92,7 +93,7 @@ func TestCreateFileCmd(t *testing.T) {
 
 	defer cleanupTestRepo(repo)
 
-	workdir := repo.Core.Workdir()
+	workdir := repo.Path
 
 	if err := os.Chdir(workdir); err != nil {
 		t.Fatal(err)
@@ -139,7 +140,7 @@ func TestCreateDirectoryCmd(t *testing.T) {
 
 	defer cleanupTestRepo(repo)
 
-	workdir := repo.Core.Workdir()
+	workdir := repo.Path
 
 	if err := os.Chdir(workdir); err != nil {
 		t.Fatal(err)
@@ -191,7 +192,7 @@ func TestCreateTagCmd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	workdir := repo.Core.Workdir()
+	workdir := repo.Path
 
 	if err := os.Chdir(workdir); err != nil {
 		t.Fatal(err)
@@ -212,13 +213,13 @@ func TestCreateTagCmd(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tags, err := repo.Core.Tags.List()
+			tags, err := repo.Tags()
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			if !contains(tags, tt.args[0]) {
-				t.Fatal(fmt.Errorf("tag %s does not exist in tags list %q", tt.args[0], tags))
+				t.Fatal(fmt.Errorf("tag %s does not exist in tags list %v", tt.args[0], tags))
 			}
 		})
 	}
@@ -246,7 +247,7 @@ func TestCreateReleaseCmd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	workdir := repo.Core.Workdir()
+	workdir := repo.Path
 
 	if err := os.Chdir(workdir); err != nil {
 		t.Fatal(err)
@@ -267,13 +268,13 @@ func TestCreateReleaseCmd(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tags, err := repo.Core.Tags.List()
+			tags, err := repo.Tags()
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			if !contains(tags, tt.args[0]) {
-				t.Fatal(fmt.Errorf("release %s does not exist in tags list %q", tt.args[0], tags))
+				t.Fatal(fmt.Errorf("release %s does not exist in tags list %v", tt.args[0], tags))
 			}
 		})
 	}

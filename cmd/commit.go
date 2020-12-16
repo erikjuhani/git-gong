@@ -49,8 +49,6 @@ func commit(paths []string) (err error) {
 		return
 	}
 
-	defer repo.Free()
-
 	treeID, err := repo.AddToIndex(paths)
 	if err != nil {
 		return

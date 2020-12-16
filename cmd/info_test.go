@@ -37,7 +37,7 @@ func TestInfoCmd(t *testing.T) {
 
 	defer cleanupTestRepo(repo)
 
-	workdir := repo.Core.Workdir()
+	workdir := repo.Path
 
 	if err := os.Chdir(workdir); err != nil {
 		t.Fatal(err)
@@ -75,12 +75,12 @@ func TestInfoCmd(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			hc, err := repo.HeadCommit()
+			hc, err := repo.Head.Commit()
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			expected := fmt.Sprintf(tt.expected, cb.Shorthand(), hc.Id().String())
+			expected := fmt.Sprintf(tt.expected, cb.Shorthand, hc.ID.String())
 
 			if !bytes.Equal(out, []byte(expected)) {
 				t.Fatal(fmt.Errorf("actual info output %s did not match the expected %s output", out, expected))

@@ -29,7 +29,7 @@ func seedRepo(repo *gong.Repository, files ...string) (commidID *lib.Oid, err er
 	}
 
 	for _, f := range files {
-		path := fmt.Sprintf("%s/%s", repo.Core.Workdir(), f)
+		path := fmt.Sprintf("%s/%s", repo.Path, f)
 		if err = ioutil.WriteFile(path, []byte("temp\n"), 0644); err != nil {
 			return
 		}
@@ -44,10 +44,9 @@ func seedRepo(repo *gong.Repository, files ...string) (commidID *lib.Oid, err er
 }
 
 func cleanupTestRepo(r *gong.Repository) {
-	if err := os.RemoveAll(r.Core.Workdir()); err != nil {
+	if err := os.RemoveAll(r.Path); err != nil {
 		panic(err)
 	}
-	defer r.Core.Free()
 }
 
 func TestCommitCmd(t *testing.T) {
@@ -81,7 +80,7 @@ func TestCommitCmd(t *testing.T) {
 
 	defer cleanupTestRepo(repo)
 
-	workdir := repo.Core.Workdir()
+	workdir := repo.Path
 
 	if err := os.Chdir(workdir); err != nil {
 		t.Fatal(err)
@@ -124,17 +123,12 @@ func TestCommitCmd(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			head, err := repo.Head()
+			commit, err := repo.Head.Commit()
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			commit, err := repo.Core.LookupCommit(head.Target())
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			tree, err := repo.Core.LookupTree(commit.TreeId())
+			tree, err := commit.Tree()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -148,7 +142,7 @@ func TestCommitCmd(t *testing.T) {
 				t.Fatal(errors.New("commit was not recorded to repository"))
 			}
 
-			if commit.Id().String() != commits[0].Id().String() {
+			if commit.ID.String() != commits[0].ID.String() {
 				t.Fatal(errors.New("commit head does not match commits"))
 			}
 
@@ -157,7 +151,8 @@ func TestCommitCmd(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				diff, err := repo.Core.DiffTreeToTree(parentTree, tree, nil)
+
+				diff, err := repo.DiffTreeToTree(parentTree, tree)
 				if err != nil {
 					t.Fatal(err)
 				}

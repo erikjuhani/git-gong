@@ -34,8 +34,6 @@ var infoCmd = &cobra.Command{
 			return
 		}
 
-		defer repo.Free()
-
 		info, err := repo.Info()
 		if err != nil {
 			cmd.PrintErr(err)
