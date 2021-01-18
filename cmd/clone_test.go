@@ -6,14 +6,16 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/erikjuhani/git-gong/gong"
 )
 
 func TestCloneCmd(t *testing.T) {
-	r, err := createTestRepo()
+	r, clean, err := gong.TestRepo()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cleanupTestRepo(r)
+	defer clean()
 
 	parts := strings.Split(r.GitPath, "/")
 	repoName := fmt.Sprintf("%s/%s", parts[len(parts)-3], strings.TrimSuffix(parts[len(parts)-1], ".git"))

@@ -31,17 +31,17 @@ func TestCreateBranchCmd(t *testing.T) {
 			args: []string{"gong-branch"},
 		},
 	}
-	repo, err := createTestRepo()
+	repo, clean, err := gong.TestRepo()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = seedRepo(repo)
+	_, err = repo.Seed(commitMsg)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer cleanupTestRepo(repo)
+	defer clean()
 
 	workdir := repo.Path
 
@@ -86,12 +86,12 @@ func TestCreateFileCmd(t *testing.T) {
 			args: []string{"module/gongo-bongo.go"},
 		},
 	}
-	repo, err := createTestRepo()
+	repo, clean, err := gong.TestRepo()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer cleanupTestRepo(repo)
+	defer clean()
 
 	workdir := repo.Path
 
@@ -133,12 +133,12 @@ func TestCreateDirectoryCmd(t *testing.T) {
 			args: []string{"gong-folder"},
 		},
 	}
-	repo, err := createTestRepo()
+	repo, clean, err := gong.TestRepo()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer cleanupTestRepo(repo)
+	defer clean()
 
 	workdir := repo.Path
 
@@ -180,14 +180,14 @@ func TestCreateTagCmd(t *testing.T) {
 			args: []string{"v0.1.0"},
 		},
 	}
-	repo, err := createTestRepo()
+	repo, clean, err := gong.TestRepo()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer cleanupTestRepo(repo)
+	defer clean()
 
-	_, err = seedRepo(repo)
+	_, err = repo.Seed(commitMsg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,14 +235,14 @@ func TestCreateReleaseCmd(t *testing.T) {
 			args: []string{"v0.1.0"},
 		},
 	}
-	repo, err := createTestRepo()
+	repo, clean, err := gong.TestRepo()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer cleanupTestRepo(repo)
+	defer clean()
 
-	_, err = seedRepo(repo)
+	_, err = repo.Seed(commitMsg)
 	if err != nil {
 		t.Fatal(err)
 	}

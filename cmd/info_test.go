@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/erikjuhani/git-gong/gong"
 )
 
 func TestInfoCmd(t *testing.T) {
@@ -25,17 +27,16 @@ func TestInfoCmd(t *testing.T) {
 		},
 	}
 
-	repo, err := createTestRepo()
+	repo, clean, err := gong.TestRepo()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer clean()
 
-	_, err = seedRepo(repo)
+	_, err = repo.Seed(commitMsg)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	defer cleanupTestRepo(repo)
 
 	workdir := repo.Path
 

@@ -14,41 +14,6 @@ import (
 	lib "github.com/libgit2/git2go/v31"
 )
 
-func createTestRepo() (*gong.Repository, error) {
-	path, err := ioutil.TempDir("", "gong")
-	if err != nil {
-		return nil, err
-	}
-
-	return gong.Init(path, false, "")
-}
-
-func seedRepo(repo *gong.Repository, files ...string) (commit *gong.Commit, err error) {
-	if len(files) == 0 {
-		files = []string{"README.md", "gongo-bongo.go"}
-	}
-
-	for _, f := range files {
-		path := fmt.Sprintf("%s/%s", repo.Path, f)
-		if err = ioutil.WriteFile(path, []byte("temp\n"), 0644); err != nil {
-			return
-		}
-	}
-
-	tree, err := repo.AddToIndex(files)
-	if err != nil {
-		return
-	}
-
-	return repo.CreateCommit(tree, commitMsg)
-}
-
-func cleanupTestRepo(r *gong.Repository) {
-	if err := os.RemoveAll(r.Path); err != nil {
-		panic(err)
-	}
-}
-
 func TestCommitCmd(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -74,12 +39,12 @@ func TestCommitCmd(t *testing.T) {
 		},
 	}
 
-	repo, err := createTestRepo()
+	repo, cleanup, err := gong.TestRepo()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer cleanupTestRepo(repo)
+	defer cleanup()
 
 	workdir := repo.Path
 

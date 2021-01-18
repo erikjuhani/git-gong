@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/erikjuhani/git-gong/gong"
 	lib "github.com/libgit2/git2go/v31"
 )
 
@@ -24,12 +25,13 @@ func TestSwitchBranchCmd(t *testing.T) {
 		},
 	}
 
-	repo, err := createTestRepo()
+	repo, clean, err := gong.TestRepo()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer clean()
 
-	_, err = seedRepo(repo)
+	_, err = repo.Seed(commitMsg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,8 +40,6 @@ func TestSwitchBranchCmd(t *testing.T) {
 	if err = ioutil.WriteFile(path, []byte("---i-am-untracked-and-i-shall-be-stashed---\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-
-	defer cleanupTestRepo(repo)
 
 	workdir := repo.Path
 
@@ -80,24 +80,23 @@ func TestSwitchCommitCmd(t *testing.T) {
 		},
 	}
 
-	repo, err := createTestRepo()
+	repo, clean, err := gong.TestRepo()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer clean()
 
-	firstCommit, err := seedRepo(repo)
+	firstCommit, err := repo.Seed(commitMsg)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	expectedID := firstCommit.ID.String()
 
-	_, err = seedRepo(repo, "commit.me")
+	_, err = repo.Seed("second", "commit.me")
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	defer cleanupTestRepo(repo)
 
 	workdir := repo.Path
 
@@ -142,12 +141,13 @@ func TestSwitchTagCmd(t *testing.T) {
 		},
 	}
 
-	repo, err := createTestRepo()
+	repo, clean, err := gong.TestRepo()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer clean()
 
-	firstCommit, err := seedRepo(repo)
+	firstCommit, err := repo.Seed(commitMsg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,12 +159,10 @@ func TestSwitchTagCmd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = seedRepo(repo, "commit.me")
+	_, err = repo.Seed("second", "commit.me")
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	defer cleanupTestRepo(repo)
 
 	workdir := repo.Path
 
@@ -209,12 +207,13 @@ func TestSwitchReleaseCmd(t *testing.T) {
 		},
 	}
 
-	repo, err := createTestRepo()
+	repo, clean, err := gong.TestRepo()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer clean()
 
-	firstCommit, err := seedRepo(repo)
+	firstCommit, err := repo.Seed(commitMsg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,12 +225,10 @@ func TestSwitchReleaseCmd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = seedRepo(repo, "commit.me")
+	_, err = repo.Seed("second", "commit.me")
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	defer cleanupTestRepo(repo)
 
 	workdir := repo.Path
 
