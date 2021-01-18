@@ -8,10 +8,10 @@ import (
 
 var defaultEditor = "vi"
 
-func OpenInEditor(filename string) (err error) {
+func OpenInEditor(filename string) error {
 	executable, err := exec.LookPath(defaultEditor)
 	if err != nil {
-		return
+		return err
 	}
 
 	command := exec.Command(executable, filename)
@@ -22,22 +22,23 @@ func OpenInEditor(filename string) (err error) {
 	return command.Run()
 }
 
-func CaptureInput() (input []byte, err error) {
+func CaptureInput() ([]byte, error) {
+	var input []byte
+
 	file, err := ioutil.TempFile(os.TempDir(), "gongcommit")
 	if err != nil {
-		return
+		return input, err
 	}
 
 	filename := file.Name()
-
 	defer os.Remove(filename)
 
-	if err = file.Close(); err != nil {
-		return
+	if err := file.Close(); err != nil {
+		return input, err
 	}
 
-	if err = OpenInEditor(filename); err != nil {
-		return
+	if err := OpenInEditor(filename); err != nil {
+		return input, err
 	}
 
 	return ioutil.ReadFile(filename)

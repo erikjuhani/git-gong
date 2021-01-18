@@ -11,6 +11,14 @@ import (
 	git "github.com/libgit2/git2go/v31"
 )
 
+var (
+	DefaultReference = "main"
+)
+
+var (
+	ErrNothingToCommit = errors.New("nothing to commit")
+)
+
 const (
 	stashPattern = "@%s"
 	headRef      = "refs/heads/"
@@ -143,17 +151,13 @@ func (collection *StashCollection) Stashes() map[string]*Stash {
 	return collection.stashes
 }
 
-var (
-	DefaultReference = "main"
-)
-
 // Init initializes the repository.
 // TODO: use the git config to set the initial default branch.
 // more info: https://github.blog/2020-07-27-highlights-from-git-2-28/#introducing-init-defaultbranch
-func Init(path string, bare bool, initialReference string) (repo *Repository, err error) {
+func Init(path string, bare bool, initialReference string) (*Repository, error) {
 	gitRepo, err := git.InitRepository(path, bare)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	if checkEmptyString(initialReference) {
@@ -161,16 +165,14 @@ func Init(path string, bare bool, initialReference string) (repo *Repository, er
 	}
 
 	initRef := fmt.Sprintf("%s%s", headRef, initialReference)
-	err = ioutil.WriteFile(fmt.Sprintf("%s/HEAD", gitRepo.Path()), []byte("ref: "+initRef), 0644)
-	if err != nil {
-		return
+	if err := ioutil.WriteFile(fmt.Sprintf("%s/HEAD", gitRepo.Path()), []byte("ref: "+initRef), 0644); err != nil {
+		return nil, err
 	}
 
 	index, err := gitRepo.Index()
 	if err != nil {
-		return
+		return nil, err
 	}
-
 	defer Free(index)
 
 	return NewRepository(gitRepo, index), nil
@@ -189,15 +191,15 @@ func (repo *Repository) FindBranch(branchName string, branchType git.BranchType)
 	return NewBranch(branchName, gitBranch), nil
 }
 
-func (repo *Repository) Info() (output string, err error) {
+func (repo *Repository) Info() (string, error) {
 	currentBranch, err := repo.CurrentBranch()
 	if err != nil {
-		return
+		return "", err
 	}
 
 	currentTip, err := repo.Head.Commit()
 	if err != nil {
-		return
+		return "", err
 	}
 
 	sb := strings.Builder{}
@@ -207,7 +209,7 @@ func (repo *Repository) Info() (output string, err error) {
 
 	entries, err := repo.StatusEntries()
 	if err != nil {
-		return
+		return "", err
 	}
 
 	if len(entries) == 0 {
@@ -236,32 +238,34 @@ func (repo *Repository) Info() (output string, err error) {
 	return strings.TrimSuffix(sb.String(), "\n"), nil
 }
 
-func (repo *Repository) StatusEntries() (entries []git.StatusEntry, err error) {
+func (repo *Repository) StatusEntries() ([]git.StatusEntry, error) {
 	opts := &git.StatusOptions{
 		Show:  git.StatusShowIndexAndWorkdir,
 		Flags: git.StatusOptIncludeUntracked | git.StatusOptRenamesHeadToIndex | git.StatusOptSortCaseSensitively,
 	}
 
+	var entries []git.StatusEntry
+
 	statusList, err := repo.Essence().StatusList(opts)
 	if err != nil {
-		return
+		return entries, err
 	}
+	defer Free(statusList)
 
-	amount, err := statusList.EntryCount()
+	entryCount, err := statusList.EntryCount()
 	if err != nil {
-		return
+		return entries, err
 	}
 
-	for i := 0; i < amount; i++ {
+	for i := 0; i < entryCount; i++ {
 		entry, err := statusList.ByIndex(i)
 		if err != nil {
-			return entries, err
+			continue
 		}
-
 		entries = append(entries, entry)
 	}
 
-	return
+	return entries, nil
 }
 
 func (repo *Repository) CurrentBranch() (*Branch, error) {
@@ -435,18 +439,17 @@ func (repo *Repository) CheckoutBranch(branchName string) (*Branch, error) {
 		}
 		defer Free(ref)
 
-		err = repo.Head.SetReference(ref.Name())
-		if err != nil {
+		if err := repo.Head.SetReference(ref.Name()); err != nil {
 			return nil, err
 		}
 
-		err = repo.Head.Checkout()
-		if err != nil {
+		if err := repo.Head.Checkout(); err != nil {
 			return nil, err
 		}
 	}
 
 	branch, err := repo.FindBranch(branchName, git.BranchLocal)
+
 	// Branch does not exist, create it first
 	if branch == nil || err != nil {
 		branch, err = repo.CreateLocalBranch(branchName)
@@ -512,41 +515,40 @@ func Open() (repo *Repository, err error) {
 	return NewRepository(gitRepo, index), nil
 }
 
-func (repo *Repository) Changed() (err error) {
+func (repo *Repository) Changed() error {
 	diff, err := repo.Essence().DiffIndexToWorkdir(
 		repo.Index,
 		&git.DiffOptions{Flags: git.DiffIncludeUntracked},
 	)
 	if err != nil {
-		return
+		return err
 	}
 	defer diff.Free()
 
 	stats, err := diff.Stats()
 	if err != nil {
-		return
+		return err
 	}
 	defer stats.Free()
 
-	changedFiles := stats.FilesChanged()
+	changeCount := stats.FilesChanged()
 
 	status, err := repo.Essence().StatusList(&git.StatusOptions{})
 	if err != nil {
-		return
-	}
-
-	entries, err := status.EntryCount()
-	if err != nil {
-		return
+		return err
 	}
 	defer Free(status)
 
-	if changedFiles == 0 && entries == 0 {
-		err = errors.New("no files changed, nothing to commit, working tree clean")
-		return
+	entryCount, err := status.EntryCount()
+	if err != nil {
+		return err
 	}
 
-	return
+	if changeCount == 0 && entryCount == 0 {
+		return fmt.Errorf("no files changed, %w", ErrNothingToCommit)
+	}
+
+	return nil
 }
 
 func (repo *Repository) AddToIndex(pathspec []string) (*git.Tree, error) {
