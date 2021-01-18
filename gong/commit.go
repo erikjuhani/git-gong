@@ -7,7 +7,11 @@ import (
 type Commit struct {
 	ID      *git.Oid
 	Message string
-	core    *git.Commit
+	essence *git.Commit
+}
+
+func (commit *Commit) Essence() *git.Commit {
+	return commit.essence
 }
 
 func NewCommit(commit *git.Commit) *Commit {
@@ -17,10 +21,22 @@ func NewCommit(commit *git.Commit) *Commit {
 	return &Commit{
 		ID:      id,
 		Message: msg,
-		core:    commit,
+		essence: commit,
 	}
 }
 
+func (commit *Commit) Parent() *Commit {
+	return NewCommit(commit.essence.Parent(0))
+}
+
+func (commit *Commit) IsRoot() bool {
+	return commit.essence.ParentCount() == 0
+}
+
 func (commit *Commit) Tree() (*git.Tree, error) {
-	return commit.core.Tree()
+	return commit.essence.Tree()
+}
+
+func (commit *Commit) Free() {
+	commit.Essence().Free()
 }

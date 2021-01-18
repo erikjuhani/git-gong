@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
-	"github.com/erikjuhani/git-gong/cli"
 	git "github.com/libgit2/git2go/v31"
 )
 
@@ -23,46 +21,126 @@ func checkEmptyString(str string) bool {
 	return len(strings.TrimSpace(str)) == 0
 }
 
+type freer interface {
+	Free()
+}
+
+func Free(f freer) {
+	f.Free()
+}
+
 type Repository struct {
 	Head    *Head
 	Path    string
 	GitPath string
-	core    *git.Repository
-	index   *git.Index
+	Index   *git.Index
+	Tree    *git.Tree
+	essence *git.Repository
+	Stashes *StashCollection
+}
+
+func (repo *Repository) Free() {
+	repo.Essence().Free()
+}
+
+func (repo *Repository) Essence() *git.Repository {
+	return repo.essence
+}
+
+func (repo *Repository) FindTree(treeID *git.Oid) (*git.Tree, error) {
+	return repo.Essence().LookupTree(treeID)
 }
 
 func NewRepository(gitRepo *git.Repository, index *git.Index) *Repository {
 	return &Repository{
-		Head:    &Head{repository: gitRepo},
+		Head:    NewHead(gitRepo),
 		Path:    gitRepo.Workdir(),
 		GitPath: gitRepo.Path(),
-		core:    gitRepo,
-		index:   index,
+		Index:   index,
+		Stashes: NewStashCollection(&gitRepo.Stashes),
+		essence: gitRepo,
 	}
-}
-
-func NewTag(gitTag *git.Tag) *Tag {
-	return &Tag{
-		ID:   gitTag.Id(),
-		Name: gitTag.Name(),
-		core: gitTag,
-	}
-}
-
-type Tag struct {
-	ID   *git.Oid
-	Name string
-	core *git.Tag
 }
 
 type FileEntry struct{}
 
 type Info struct{}
 
-type Branch struct {
-	Name      string
-	Shorthand string
-	core      *git.Branch
+type StashCollection struct {
+	essence *git.StashCollection
+	stashes map[string]*Stash
+}
+
+func NewStashCollection(gitStash *git.StashCollection) *StashCollection {
+	stashes := make(map[string]*Stash)
+
+	gitStash.Foreach(func(index int, message string, id *git.Oid) error {
+		stashes[message] = &Stash{ID: id, Message: message, Index: index}
+		return nil
+	})
+
+	return &StashCollection{
+		essence: gitStash,
+		stashes: stashes,
+	}
+}
+
+func (collection *StashCollection) Essence() *git.StashCollection {
+	return collection.essence
+}
+
+func (collection *StashCollection) Create(head *Head) (*Stash, error) {
+	currentBranch, err := head.Branch()
+	if err != nil {
+		return nil, err
+	}
+
+	stashName := fmt.Sprintf(stashPattern, currentBranch.Name)
+
+	stashID, err := collection.essence.Save(signature(), stashName, git.StashIncludeUntracked)
+
+	stash := &Stash{ID: stashID, Message: stashName, Index: 0}
+	collection.stashes[stashName] = stash
+
+	return stash, nil
+}
+
+type Stash struct {
+	ID      *git.Oid
+	Message string
+	Index   int
+}
+
+func (collection *StashCollection) Find(name string) (*Stash, error) {
+	if stash, ok := collection.stashes[name]; ok {
+		return stash, nil
+	}
+
+	return nil, fmt.Errorf("stash with name %s was not found", name)
+}
+
+func (collection *StashCollection) Pop(name string) error {
+	stash, err := collection.Find(name)
+	if err != nil {
+		return err
+	}
+
+	opts, err := git.DefaultStashApplyOptions()
+	if err != nil {
+		return err
+	}
+
+	if err := collection.Essence().Pop(stash.Index, opts); err != nil {
+		return err
+	}
+
+	delete(collection.stashes, name)
+
+	return nil
+}
+
+func (collection *StashCollection) Stashes() map[string]*Stash {
+	return collection.stashes
 }
 
 var (
@@ -88,29 +166,27 @@ func Init(path string, bare bool, initialReference string) (repo *Repository, er
 		return
 	}
 
-	idx, err := gitRepo.Index()
+	index, err := gitRepo.Index()
 	if err != nil {
 		return
 	}
 
-	return NewRepository(gitRepo, idx), nil
+	defer Free(index)
+
+	return NewRepository(gitRepo, index), nil
 }
 
 func (repo *Repository) DiffTreeToTree(oldTree *git.Tree, newTree *git.Tree) (*git.Diff, error) {
-	return repo.core.DiffTreeToTree(oldTree, newTree, nil)
+	return repo.Essence().DiffTreeToTree(oldTree, newTree, nil)
 }
 
-func (repo *Repository) StashAmount() (amount uint) {
-	repo.core.Stashes.Foreach(func(index int, message string, id *git.Oid) error {
-		amount++
-		return nil
-	})
+func (repo *Repository) FindBranch(branchName string, branchType git.BranchType) (*Branch, error) {
+	gitBranch, err := repo.Essence().LookupBranch(branchName, branchType)
+	if err != nil {
+		return nil, err
+	}
 
-	return
-}
-
-func (repo *Repository) FindBranch(branchName string, branchType git.BranchType) (*git.Branch, error) {
-	return repo.core.LookupBranch(branchName, branchType)
+	return NewBranch(branchName, gitBranch), nil
 }
 
 func (repo *Repository) Info() (output string, err error) {
@@ -166,7 +242,7 @@ func (repo *Repository) StatusEntries() (entries []git.StatusEntry, err error) {
 		Flags: git.StatusOptIncludeUntracked | git.StatusOptRenamesHeadToIndex | git.StatusOptSortCaseSensitively,
 	}
 
-	statusList, err := repo.core.StatusList(opts)
+	statusList, err := repo.Essence().StatusList(opts)
 	if err != nil {
 		return
 	}
@@ -192,42 +268,14 @@ func (repo *Repository) CurrentBranch() (*Branch, error) {
 	return repo.Head.Branch()
 }
 
-func (repo *Repository) CreateStash() (stash *git.Oid, err error) {
-	currentBranch, err := repo.CurrentBranch()
-	if err != nil {
-		return
-	}
-
-	stashName := fmt.Sprintf(stashPattern, currentBranch.Name)
-
-	repo.core.Stashes.Save(signature(), stashName, git.StashIncludeUntracked)
-
-	return
-}
-
-func (repo *Repository) PopStash(branchName string) error {
-	re := regexp.MustCompile(`@[\w-]+`)
-
-	return repo.core.Stashes.Foreach(func(index int, message string, id *git.Oid) error {
-		if branchName == strings.Trim(re.FindString(message), "@") {
-			opts, err := git.DefaultStashApplyOptions()
-			if err != nil {
-				return err
-			}
-
-			return repo.core.Stashes.Pop(index, opts)
-		}
-
-		return nil
-	})
-}
-
-func (repo *Repository) Tags() (tags []*Tag, err error) {
-	err = repo.core.Tags.Foreach(func(name string, id *git.Oid) error {
-		ref, err := repo.core.References.Lookup(name)
+func (repo *Repository) Tags() ([]*Tag, error) {
+	var tags []*Tag
+	err := repo.Essence().Tags.Foreach(func(name string, id *git.Oid) error {
+		ref, err := repo.Essence().References.Lookup(name)
 		if err != nil {
 			return err
 		}
+		defer Free(ref)
 
 		if ref.IsTag() {
 			tagObj, err := ref.Peel(git.ObjectTag)
@@ -239,6 +287,7 @@ func (repo *Repository) Tags() (tags []*Tag, err error) {
 			if err != nil {
 				return err
 			}
+			defer Free(tag)
 
 			tags = append(tags, NewTag(tag))
 		}
@@ -246,18 +295,23 @@ func (repo *Repository) Tags() (tags []*Tag, err error) {
 		return nil
 	})
 
-	return
-}
-
-func (repo *Repository) FindTag(tagName string) (tag *Tag, err error) {
-	tags, err := repo.Tags()
 	if err != nil {
-		return
+		return tags, err
 	}
 
-	for _, t := range tags {
-		if t.Name == tagName {
-			tag = t
+	return tags, nil
+}
+
+func (repo *Repository) FindTag(tagName string) (*Tag, error) {
+	tags, err := repo.Tags()
+	if err != nil {
+		return nil, err
+	}
+
+	var tag *Tag
+
+	for _, tag = range tags {
+		if tag.Name == tagName {
 			break
 		}
 	}
@@ -265,12 +319,13 @@ func (repo *Repository) FindTag(tagName string) (tag *Tag, err error) {
 	if tag == nil {
 		return nil, fmt.Errorf("no tag found by tag name %s", tagName)
 	}
+	defer Free(tag)
 
-	return
+	return tag, nil
 }
 
-func (repo *Repository) FindCommit(id *git.Oid) (*Commit, error) {
-	gitCommit, err := repo.core.LookupCommit(id)
+func (repo *Repository) FindCommit(commitID *git.Oid) (*Commit, error) {
+	gitCommit, err := repo.Essence().LookupCommit(commitID)
 	if err != nil {
 		return nil, err
 	}
@@ -279,22 +334,23 @@ func (repo *Repository) FindCommit(id *git.Oid) (*Commit, error) {
 }
 
 func (repo *Repository) CheckoutTree(tree *git.Tree, opts *git.CheckoutOptions) error {
-	return repo.core.CheckoutTree(tree, opts)
+	return repo.Essence().CheckoutTree(tree, opts)
 }
 
-func (repo *Repository) CheckoutTag(tagName string) (tag *Tag, err error) {
+func (repo *Repository) CheckoutTag(tagName string) (*Tag, error) {
 	checkoutOpts := &git.CheckoutOpts{
 		Strategy: git.CheckoutSafe | git.CheckoutRecreateMissing | git.CheckoutAllowConflicts | git.CheckoutUseTheirs,
 	}
 
 	tags, err := repo.Tags()
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	for _, t := range tags {
-		if t.Name == tagName {
-			tag = t
+	var tag *Tag
+
+	for _, tag = range tags {
+		if tag.Name == tagName {
 			break
 		}
 	}
@@ -302,38 +358,42 @@ func (repo *Repository) CheckoutTag(tagName string) (tag *Tag, err error) {
 	if tag == nil {
 		return nil, fmt.Errorf("no tag found by tag name %s", tagName)
 	}
+	defer Free(tag)
 
-	commit, err := repo.FindCommit(tag.core.TargetId())
+	commit, err := repo.FindCommit(tag.Essence().TargetId())
 	if err != nil {
-		return
+		return nil, err
 	}
+	defer Free(commit)
 
 	tree, err := commit.Tree()
 	if err != nil {
-		return
+		return nil, err
+	}
+	defer Free(tree)
+
+	if err := repo.CheckoutTree(tree, checkoutOpts); err != nil {
+		return nil, err
 	}
 
-	defer tree.Free()
-
-	err = repo.CheckoutTree(tree, checkoutOpts)
-	if err != nil {
-		return
+	if err := repo.Head.Detach(commit.ID); err != nil {
+		return nil, err
 	}
 
-	err = repo.Head.Detach(commit.ID)
-	return
+	return tag, nil
 }
 
-func (repo *Repository) CheckoutCommit(hash string) (commit *Commit, err error) {
+func (repo *Repository) CheckoutCommit(hash string) (*Commit, error) {
 	checkoutOpts := &git.CheckoutOpts{
 		Strategy: git.CheckoutSafe | git.CheckoutRecreateMissing | git.CheckoutAllowConflicts | git.CheckoutUseTheirs,
 	}
 
 	commits, err := repo.Commits()
 	if err != nil {
-		return
+		return nil, err
 	}
 
+	var commit *Commit
 	for _, commit = range commits {
 		if commit.ID.String() == hash {
 			break
@@ -343,89 +403,93 @@ func (repo *Repository) CheckoutCommit(hash string) (commit *Commit, err error) 
 	if commit == nil {
 		return nil, fmt.Errorf("no commit found by hash %s", hash)
 	}
+	defer Free(commit)
 
 	tree, err := commit.Tree()
 	if err != nil {
-		return
+		return nil, err
+	}
+	defer Free(tree)
+
+	if err := repo.Essence().CheckoutTree(tree, checkoutOpts); err != nil {
+		return nil, err
 	}
 
-	defer tree.Free()
-
-	err = repo.core.CheckoutTree(tree, checkoutOpts)
-	if err != nil {
-		return
+	if err := repo.Head.Detach(commit.ID); err != nil {
+		return nil, err
 	}
 
-	err = repo.Head.Detach(commit.ID)
-
-	return
+	return commit, err
 }
 
-func (repo *Repository) CheckoutBranch(branchName string) (branch *git.Branch, err error) {
-	detached, err := repo.core.IsHeadDetached()
+func (repo *Repository) CheckoutBranch(branchName string) (*Branch, error) {
+	detached, err := repo.Head.IsDetached()
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	if detached {
-		ref, err := repo.core.References.Lookup(fmt.Sprintf("%s%s", headRef, branchName))
+		ref, err := repo.Essence().References.Lookup(fmt.Sprintf("%s%s", headRef, branchName))
+		if err != nil {
+			return nil, err
+		}
+		defer Free(ref)
+
+		err = repo.Head.SetReference(ref.Name())
 		if err != nil {
 			return nil, err
 		}
 
-		repo.core.SetHead(ref.Name())
-
-		checkoutOpts := &git.CheckoutOpts{
-			Strategy: git.CheckoutSafe | git.CheckoutRecreateMissing | git.CheckoutAllowConflicts | git.CheckoutUseTheirs,
+		err = repo.Head.Checkout()
+		if err != nil {
+			return nil, err
 		}
-
-		repo.core.CheckoutHead(checkoutOpts)
 	}
 
-	branch, err = repo.core.LookupBranch(branchName, git.BranchLocal)
-
+	branch, err := repo.FindBranch(branchName, git.BranchLocal)
 	// Branch does not exist, create it first
 	if branch == nil || err != nil {
 		branch, err = repo.CreateLocalBranch(branchName)
+		if err != nil {
+			return nil, err
+		}
 	}
+	defer Free(branch)
 
-	defer branch.Free()
-
-	_, err = repo.CreateStash()
+	_, err = repo.Stashes.Create(repo.Head)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	checkoutOpts := &git.CheckoutOpts{
 		Strategy: git.CheckoutSafe | git.CheckoutRecreateMissing | git.CheckoutAllowConflicts | git.CheckoutUseTheirs,
 	}
 
-	localCommit, err := repo.core.LookupCommit(branch.Target())
+	localCommit, err := repo.FindCommit(branch.ReferenceID)
 	if err != nil {
-		return
+		return nil, err
+	}
+	defer Free(localCommit)
+
+	tree, err := localCommit.Tree()
+	if err != nil {
+		return nil, err
+	}
+	defer Free(tree)
+
+	if err := repo.Essence().CheckoutTree(tree, checkoutOpts); err != nil {
+		return nil, err
 	}
 
-	defer localCommit.Free()
-
-	tree, err := repo.core.LookupTree(localCommit.TreeId())
-	if err != nil {
-		return
+	if err := repo.Head.SetReference(headRef + branchName); err != nil {
+		return nil, err
 	}
 
-	defer tree.Free()
-
-	err = repo.core.CheckoutTree(tree, checkoutOpts)
-	if err != nil {
-		return
+	if err := repo.Stashes.Pop(branchName); err != nil {
+		return nil, err
 	}
 
-	err = repo.core.SetHead(fmt.Sprintf("%s%s", headRef, branchName))
-	if err != nil {
-		return
-	}
-
-	err = repo.PopStash(branchName)
-	return
+	return branch, nil
 }
 
 func Open() (repo *Repository, err error) {
@@ -439,35 +503,34 @@ func Open() (repo *Repository, err error) {
 		return
 	}
 
-	idx, err := gitRepo.Index()
+	index, err := gitRepo.Index()
 	if err != nil {
 		return
 	}
+	defer Free(index)
 
-	return NewRepository(gitRepo, idx), nil
+	return NewRepository(gitRepo, index), nil
 }
 
 func (repo *Repository) Changed() (err error) {
-	diff, err := repo.core.DiffIndexToWorkdir(
-		repo.index,
+	diff, err := repo.Essence().DiffIndexToWorkdir(
+		repo.Index,
 		&git.DiffOptions{Flags: git.DiffIncludeUntracked},
 	)
 	if err != nil {
 		return
 	}
-
 	defer diff.Free()
 
 	stats, err := diff.Stats()
 	if err != nil {
 		return
 	}
-
 	defer stats.Free()
 
 	changedFiles := stats.FilesChanged()
 
-	status, err := repo.core.StatusList(&git.StatusOptions{})
+	status, err := repo.Essence().StatusList(&git.StatusOptions{})
 	if err != nil {
 		return
 	}
@@ -476,8 +539,7 @@ func (repo *Repository) Changed() (err error) {
 	if err != nil {
 		return
 	}
-
-	defer status.Free()
+	defer Free(status)
 
 	if changedFiles == 0 && entries == 0 {
 		err = errors.New("no files changed, nothing to commit, working tree clean")
@@ -487,105 +549,87 @@ func (repo *Repository) Changed() (err error) {
 	return
 }
 
-func (repo *Repository) AddToIndex(pathspec []string) (treeID *git.Oid, err error) {
-	if err = repo.Changed(); err != nil {
-		return
+func (repo *Repository) AddToIndex(pathspec []string) (*git.Tree, error) {
+	if err := repo.Changed(); err != nil {
+		return nil, err
 	}
 
-	idx := repo.index
-
-	if err = idx.AddAll(pathspec, git.IndexAddDefault, nil); err != nil {
-		return
+	if err := repo.Index.AddAll(pathspec, git.IndexAddDefault, nil); err != nil {
+		return nil, err
 	}
 
-	treeID, err = idx.WriteTree()
+	treeID, err := repo.Index.WriteTree()
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	if err = idx.Write(); err != nil {
-		return
+	if err = repo.Index.Write(); err != nil {
+		return nil, err
 	}
 
-	return
+	return repo.FindTree(treeID)
 }
 
-func (repo *Repository) createCommit(treeID *git.Oid, commit *Commit, msg string) (id *git.Oid, err error) {
-	tree, err := repo.core.LookupTree(treeID)
-	if err != nil {
-		return
-	}
+func (repo *Repository) CreateCommit(tree *git.Tree, message string) (*Commit, error) {
+	// Implement later.
+	/*
+		if checkEmptyString(msg) {
+			input, cliErr := cli.CaptureInput()
+			if cliErr != nil {
+				return nil, cliErr
+			}
 
-	sig := signature()
-
-	if checkEmptyString(msg) {
-		input, cliErr := cli.CaptureInput()
-		if cliErr != nil {
-			return nil, cliErr
+			msg = string(input)
 		}
+	*/
 
-		msg = string(input)
+	if checkEmptyString(message) {
+		return nil, ErrEmptyCommitMsg
 	}
 
-	if checkEmptyString(msg) {
-		err = errors.New("aborting due to empty commit message")
-		return
+	head := repo.Head
+
+	exists, err := head.Exists()
+	if err != nil {
+		return nil, err
 	}
 
-	if commit != nil {
-		id, err = repo.core.CreateCommit("HEAD", sig, sig, string(msg), tree, commit.core)
+	var commitID *git.Oid
+
+	if exists {
+		headCommit, err := repo.Head.Commit()
+		defer Free(headCommit)
+
 		if err != nil {
-			return
+			return nil, err
 		}
 
-		err = repo.core.CheckoutHead(&git.CheckoutOpts{
-			Strategy: git.CheckoutSafe | git.CheckoutRecreateMissing,
-		})
-		return
-	}
-
-	// Initial commit
-	id, err = repo.core.CreateCommit("HEAD", sig, sig, string(msg), tree)
-	if err != nil {
-		return
-	}
-
-	err = repo.core.CheckoutHead(&git.CheckoutOpts{
-		Strategy: git.CheckoutSafe | git.CheckoutRecreateMissing,
-	})
-
-	return
-}
-
-func (repo *Repository) Commit(treeID *git.Oid, msg string) (commitID *git.Oid, err error) {
-	unborn, err := repo.core.IsHeadUnborn()
-	if err != nil {
-		return
-	}
-
-	if unborn {
-		commitID, err = repo.createCommit(treeID, nil, msg)
+		commitID, err = repo.Essence().CreateCommit(head.RefName, signature(), signature(), message, tree, headCommit.Essence())
 		if err != nil {
-			return
+			return nil, err
 		}
-
-		return
+	} else {
+		// Initial commit.
+		commitID, err = repo.Essence().CreateCommit(head.RefName, signature(), signature(), message, tree)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	currentTip, err := repo.Head.Commit()
-	if err != nil {
-		return
+	if err := head.Checkout(); err != nil {
+		return nil, err
 	}
 
-	return repo.createCommit(treeID, currentTip, msg)
+	return repo.FindCommit(commitID)
 }
 
 func (repo *Repository) References() ([]string, error) {
 	var list []string
-	iter, err := repo.core.NewReferenceIterator()
+	iter, err := repo.Essence().NewReferenceIterator()
 	if err != nil {
 		return list, err
 	}
+	defer Free(iter)
 
 	nameIter := iter.Names()
 	name, err := nameIter.Next()
@@ -602,16 +646,17 @@ func (repo *Repository) Commits() (commits []*Commit, err error) {
 	if err != nil {
 		return
 	}
+	defer Free(headCommit)
 
 	commits = append(commits, headCommit)
 
-	if headCommit.core.ParentCount() != 0 {
-		parent := headCommit.core.Parent(0)
-		commits = append(commits, NewCommit(parent))
+	if !headCommit.IsRoot() {
+		parent := headCommit.Parent()
+		commits = append(commits, parent)
 
-		for parent.ParentCount() != 0 {
-			parent = parent.Parent(0)
-			commits = append(commits, NewCommit(parent))
+		for !parent.IsRoot() {
+			parent = parent.Parent()
+			commits = append(commits, parent)
 		}
 	}
 	return
@@ -623,8 +668,9 @@ func (repo *Repository) CreateTag(tagname string, message string) (tag *Tag, err
 	if err != nil {
 		return
 	}
+	defer Free(headCommit)
 
-	gitTag, err := repo.core.Tags.Create(tagname, headCommit.core, signature(), message)
+	gitTag, err := repo.Essence().Tags.Create(tagname, headCommit.Essence(), signature(), message)
 	if err != nil {
 		return
 	}
@@ -633,9 +679,9 @@ func (repo *Repository) CreateTag(tagname string, message string) (tag *Tag, err
 }
 
 // CreateLocalBranch creates a local branch to repository.
-func (repo *Repository) CreateLocalBranch(branchName string) (branch *git.Branch, err error) {
+func (repo *Repository) CreateLocalBranch(branchName string) (branch *Branch, err error) {
 	// Check if branch already exists
-	localBranch, err := repo.core.LookupBranch(branchName, git.BranchLocal)
+	localBranch, err := repo.FindBranch(branchName, git.BranchLocal)
 	if localBranch != nil && err != nil {
 		return
 	}
@@ -649,8 +695,18 @@ func (repo *Repository) CreateLocalBranch(branchName string) (branch *git.Branch
 	if err != nil {
 		return
 	}
+	defer Free(headCommit)
 
-	return repo.core.CreateBranch(branchName, headCommit.core, false)
+	return repo.CreateBranch(branchName, headCommit, false)
+}
+
+func (repo *Repository) CreateBranch(branchName string, commit *Commit, force bool) (*Branch, error) {
+	gitBranch, err := repo.Essence().CreateBranch(branchName, commit.Essence(), force)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewBranch(branchName, gitBranch), nil
 }
 
 // TODO get signature from git configuration

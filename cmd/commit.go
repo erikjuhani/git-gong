@@ -48,17 +48,19 @@ func commit(paths []string) (err error) {
 	if err != nil {
 		return
 	}
+	defer gong.Free(repo)
 
-	treeID, err := repo.AddToIndex(paths)
+	tree, err := repo.AddToIndex(paths)
+	if err != nil || stageOnly {
+		return
+	}
+	defer gong.Free(tree)
+
+	commit, err := repo.CreateCommit(tree, commitMsg)
 	if err != nil {
 		return
 	}
-
-	if stageOnly {
-		return
-	}
-
-	_, err = repo.Commit(treeID, commitMsg)
+	defer gong.Free(commit)
 
 	return
 }

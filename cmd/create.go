@@ -46,13 +46,7 @@ var createBranchCmd = &cobra.Command{
 			return
 		}
 
-		name, err := branch.Name()
-		if err != nil {
-			cmd.PrintErr(err)
-			return
-		}
-
-		cmd.Printf("created a new branch %s\n", name)
+		cmd.Printf("created a new branch %s\n", branch.Name)
 	},
 }
 

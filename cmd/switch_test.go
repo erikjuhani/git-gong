@@ -90,7 +90,7 @@ func TestSwitchCommitCmd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expectedID := firstCommit.String()
+	expectedID := firstCommit.ID.String()
 
 	_, err = seedRepo(repo, "commit.me")
 	if err != nil {
@@ -152,7 +152,7 @@ func TestSwitchTagCmd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expectedID := firstCommit.String()
+	expectedID := firstCommit.ID.String()
 
 	_, err = repo.CreateTag("v0.1.0", "")
 	if err != nil {
@@ -219,7 +219,7 @@ func TestSwitchReleaseCmd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expectedID := firstCommit.String()
+	expectedID := firstCommit.ID.String()
 
 	_, err = repo.CreateTag("v0.1.0", "")
 	if err != nil {

@@ -23,7 +23,7 @@ func createTestRepo() (*gong.Repository, error) {
 	return gong.Init(path, false, "")
 }
 
-func seedRepo(repo *gong.Repository, files ...string) (commidID *lib.Oid, err error) {
+func seedRepo(repo *gong.Repository, files ...string) (commit *gong.Commit, err error) {
 	if len(files) == 0 {
 		files = []string{"README.md", "gongo-bongo.go"}
 	}
@@ -35,12 +35,12 @@ func seedRepo(repo *gong.Repository, files ...string) (commidID *lib.Oid, err er
 		}
 	}
 
-	treeID, err := repo.AddToIndex(files)
+	tree, err := repo.AddToIndex(files)
 	if err != nil {
 		return
 	}
 
-	return repo.Commit(treeID, commitMsg)
+	return repo.CreateCommit(tree, commitMsg)
 }
 
 func cleanupTestRepo(r *gong.Repository) {
@@ -73,6 +73,7 @@ func TestCommitCmd(t *testing.T) {
 			args:  []string{""},
 		},
 	}
+
 	repo, err := createTestRepo()
 	if err != nil {
 		t.Fatal(err)
