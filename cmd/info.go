@@ -33,6 +33,7 @@ var infoCmd = &cobra.Command{
 			cmd.PrintErr(err)
 			return
 		}
+		defer gong.Free(repo)
 
 		info, err := repo.Info()
 		if err != nil {

@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/erikjuhani/git-gong/gong"
 	git "github.com/libgit2/git2go/v31"
 	"github.com/spf13/cobra"
 )
@@ -40,8 +41,11 @@ var cloneCmd = &cobra.Command{
 	},
 }
 
+// TODO: Create a clone function to gong package.
 func cloneRepository(url string, path string) error {
 	opts := git.CloneOptions{}
-	_, err := git.Clone(url, path, &opts)
+	repo, err := git.Clone(url, path, &opts)
+	defer gong.Free(repo)
+
 	return err
 }

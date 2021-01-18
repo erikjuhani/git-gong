@@ -43,24 +43,24 @@ func commitFlags() {
 	)
 }
 
-func commit(paths []string) (err error) {
+func commit(paths []string) error {
 	repo, err := gong.Open()
 	if err != nil {
-		return
+		return err
 	}
 	defer gong.Free(repo)
 
 	tree, err := repo.AddToIndex(paths)
 	if err != nil || stageOnly {
-		return
+		return err
 	}
 	defer gong.Free(tree)
 
 	commit, err := repo.CreateCommit(tree, commitMsg)
 	if err != nil {
-		return
+		return err
 	}
 	defer gong.Free(commit)
 
-	return
+	return nil
 }

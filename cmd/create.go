@@ -39,12 +39,14 @@ var createBranchCmd = &cobra.Command{
 			cmd.PrintErr(err)
 			return
 		}
+		defer gong.Free(repo)
 
 		branch, err := repo.CreateLocalBranch(args[0])
 		if err != nil {
 			cmd.PrintErr(err)
 			return
 		}
+		defer gong.Free(branch)
 
 		cmd.Printf("created a new branch %s\n", branch.Name)
 	},
@@ -62,10 +64,14 @@ var createFileCmd = &cobra.Command{
 			return
 		}
 
-		_, err := os.Create(file)
+		f, err := os.Create(file)
 		if err != nil {
 			cmd.PrintErr(err)
 			return
+		}
+
+		if err := f.Close(); err != nil {
+			cmd.PrintErr(err)
 		}
 
 		cmd.Printf("created a new file %s\n", file)
@@ -98,6 +104,7 @@ var createReleaseCmd = &cobra.Command{
 			cmd.PrintErr(err)
 			return
 		}
+		defer gong.Free(repo)
 
 		message := ""
 
@@ -110,6 +117,9 @@ var createReleaseCmd = &cobra.Command{
 			cmd.PrintErr(err)
 			return
 		}
+
+		// TODO: Why cannot be freed from memory
+		// defer gong.Free(tag)
 
 		cmd.Printf("created a new release %s\n", tag.Name)
 	},
@@ -126,6 +136,7 @@ var createTagCmd = &cobra.Command{
 			cmd.PrintErr(err)
 			return
 		}
+		defer gong.Free(repo)
 
 		message := ""
 
@@ -138,6 +149,9 @@ var createTagCmd = &cobra.Command{
 			cmd.PrintErr(err)
 			return
 		}
+
+		// TODO: Why cannot be freed from memory
+		// defer gong.Free(tag)
 
 		cmd.Printf("created a new tag %s\n", tag.Name)
 	},

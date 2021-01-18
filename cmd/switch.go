@@ -39,12 +39,14 @@ var switchBranchCmd = &cobra.Command{
 			cmd.PrintErr(err)
 			return
 		}
+		defer gong.Free(repo)
 
-		_, err = repo.CheckoutBranch(args[0])
+		branch, err := repo.CheckoutBranch(args[0])
 		if err != nil {
 			cmd.PrintErr(err)
 			return
 		}
+		defer gong.Free(branch)
 
 		cmd.Printf("checkout to branch %s\n", args[0])
 	},
@@ -61,12 +63,14 @@ var switchCommitCmd = &cobra.Command{
 			cmd.PrintErr(err)
 			return
 		}
+		defer gong.Free(repo)
 
-		_, err = repo.CheckoutCommit(args[0])
+		commit, err := repo.CheckoutCommit(args[0])
 		if err != nil {
 			cmd.PrintErr(err)
 			return
 		}
+		defer gong.Free(commit)
 
 		cmd.Printf("switched to commit %s\n", args[0])
 	},
@@ -83,12 +87,14 @@ var switchTagCmd = &cobra.Command{
 			cmd.PrintErr(err)
 			return
 		}
+		defer gong.Free(repo)
 
 		tag, err := repo.CheckoutTag(args[0])
 		if err != nil {
 			cmd.PrintErr(err)
 			return
 		}
+		defer gong.Free(tag)
 
 		cmd.Printf("checkout to tag %s\n", tag.Name)
 	},
@@ -105,12 +111,14 @@ var switchReleaseCmd = &cobra.Command{
 			cmd.PrintErr(err)
 			return
 		}
+		defer gong.Free(repo)
 
 		tag, err := repo.CheckoutTag(args[0])
 		if err != nil {
 			cmd.PrintErr(err)
 			return
 		}
+		defer gong.Free(tag)
 
 		cmd.Printf("checkout to release %s\n", tag.Name)
 	},
