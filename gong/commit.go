@@ -29,8 +29,8 @@ func (commit *Commit) Parent() *Commit {
 	return NewCommit(commit.essence.Parent(0))
 }
 
-func (commit *Commit) IsRoot() bool {
-	return commit.essence.ParentCount() == 0
+func (commit *Commit) HasChildren() bool {
+	return commit.essence.ParentCount() != 0
 }
 
 func (commit *Commit) Tree() (*git.Tree, error) {

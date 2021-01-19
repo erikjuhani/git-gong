@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/erikjuhani/git-gong/gong"
-	git "github.com/libgit2/git2go/v31"
 	"github.com/spf13/cobra"
 )
 
@@ -23,11 +22,11 @@ var cloneCmd = &cobra.Command{
 
   Clone command takes a valid GIT URL, where the repository is located as an argument.`,
 	Args: cobra.MinimumNArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Run: func(cmd *cobra.Command, args []string) {
 		path, err := os.Getwd()
 		if err != nil {
 			cmd.PrintErr(err)
-			return err
+			return
 		}
 
 		if len(args) > 1 {
@@ -37,15 +36,11 @@ var cloneCmd = &cobra.Command{
 			path = fmt.Sprintf("%s/%s", parts[len(parts)-3], strings.TrimSuffix(parts[len(parts)-1], ".git"))
 		}
 
-		return cloneRepository(args[0], path)
+		repo, err := gong.Clone(args[0], path)
+		if err != nil {
+			cmd.PrintErr(err)
+			return
+		}
+		gong.Free(repo)
 	},
-}
-
-// TODO: Create a clone function to gong package.
-func cloneRepository(url string, path string) error {
-	opts := git.CloneOptions{}
-	repo, err := git.Clone(url, path, &opts)
-	defer gong.Free(repo)
-
-	return err
 }

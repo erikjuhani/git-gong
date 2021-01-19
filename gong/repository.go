@@ -1,9 +1,9 @@
 package gong
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -11,32 +11,8 @@ import (
 	git "github.com/libgit2/git2go/v31"
 )
 
-var (
-	DefaultReference = "main"
-)
-
-var (
-	ErrNothingToCommit = errors.New("nothing to commit")
-)
-
-const (
-	stashPattern = "@%s"
-	headRef      = "refs/heads/"
-)
-
-// TODO: Move this somewhere more appropriate
-func checkEmptyString(str string) bool {
-	return len(strings.TrimSpace(str)) == 0
-}
-
-type freer interface {
-	Free()
-}
-
-func Free(f freer) {
-	f.Free()
-}
-
+// Repository represents is an abstraction of the underlying *git.Repository.
+// To access the essence (*git.Repository) call Essence() function.
 type Repository struct {
 	Head    *Head
 	Path    string
@@ -47,10 +23,12 @@ type Repository struct {
 	Stashes *StashCollection
 }
 
+// Free frees git repository pointer.
 func (repo *Repository) Free() {
 	repo.Essence().Free()
 }
 
+// Essence returns *git.Repository.
 func (repo *Repository) Essence() *git.Repository {
 	return repo.essence
 }
@@ -68,87 +46,6 @@ func NewRepository(gitRepo *git.Repository, index *git.Index) *Repository {
 		Stashes: NewStashCollection(&gitRepo.Stashes),
 		essence: gitRepo,
 	}
-}
-
-type FileEntry struct{}
-
-type Info struct{}
-
-type StashCollection struct {
-	essence *git.StashCollection
-	stashes map[string]*Stash
-}
-
-func NewStashCollection(gitStash *git.StashCollection) *StashCollection {
-	stashes := make(map[string]*Stash)
-
-	gitStash.Foreach(func(index int, message string, id *git.Oid) error {
-		stashes[message] = &Stash{ID: id, Message: message, Index: index}
-		return nil
-	})
-
-	return &StashCollection{
-		essence: gitStash,
-		stashes: stashes,
-	}
-}
-
-func (collection *StashCollection) Essence() *git.StashCollection {
-	return collection.essence
-}
-
-func (collection *StashCollection) Create(head *Head) (*Stash, error) {
-	currentBranch, err := head.Branch()
-	if err != nil {
-		return nil, err
-	}
-
-	stashName := fmt.Sprintf(stashPattern, currentBranch.Name)
-
-	stashID, err := collection.essence.Save(signature(), stashName, git.StashIncludeUntracked)
-
-	stash := &Stash{ID: stashID, Message: stashName, Index: 0}
-	collection.stashes[stashName] = stash
-
-	return stash, nil
-}
-
-type Stash struct {
-	ID      *git.Oid
-	Message string
-	Index   int
-}
-
-func (collection *StashCollection) Find(name string) (*Stash, error) {
-	if stash, ok := collection.stashes[name]; ok {
-		return stash, nil
-	}
-
-	return nil, fmt.Errorf("stash with name %s was not found", name)
-}
-
-func (collection *StashCollection) Pop(name string) error {
-	stash, err := collection.Find(name)
-	if err != nil {
-		return err
-	}
-
-	opts, err := git.DefaultStashApplyOptions()
-	if err != nil {
-		return err
-	}
-
-	if err := collection.Essence().Pop(stash.Index, opts); err != nil {
-		return err
-	}
-
-	delete(collection.stashes, name)
-
-	return nil
-}
-
-func (collection *StashCollection) Stashes() map[string]*Stash {
-	return collection.stashes
 }
 
 // Init initializes the repository.
@@ -457,9 +354,13 @@ func (repo *Repository) CheckoutBranch(branchName string) (*Branch, error) {
 			return nil, err
 		}
 	}
-	defer Free(branch)
 
-	_, err = repo.Stashes.Create(repo.Head)
+	currentBranch, err := repo.CurrentBranch()
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = repo.Stashes.Create(currentBranch)
 	if err != nil {
 		return nil, err
 	}
@@ -488,11 +389,39 @@ func (repo *Repository) CheckoutBranch(branchName string) (*Branch, error) {
 		return nil, err
 	}
 
-	if err := repo.Stashes.Pop(branchName); err != nil {
+	// No existing stash.
+	if !repo.Stashes.Has(branch) {
+		return branch, nil
+	}
+
+	if err := repo.Stashes.Pop(branch); err != nil {
 		return nil, err
 	}
 
 	return branch, nil
+}
+
+// Clone clones a git repository from source location to a target location.
+// If target location is an empty string clone to a directory named after source.
+func Clone(source string, target string) (*Repository, error) {
+	opts := git.CloneOptions{}
+
+	// Check that the source is a valid url.
+	u, err := url.Parse(source)
+	if err != nil {
+		return nil, err
+	}
+
+	src := strings.TrimSuffix(u.String(), ".git")
+
+	gitRepo, err := git.Clone(src, target, &opts)
+	if err != nil {
+		return nil, err
+	}
+	defer Free(gitRepo)
+
+	return NewRepository(gitRepo, nil), nil
+
 }
 
 func Open() (repo *Repository, err error) {
@@ -626,12 +555,13 @@ func (repo *Repository) CreateCommit(tree *git.Tree, message string) (*Commit, e
 }
 
 func (repo *Repository) References() ([]string, error) {
-	var list []string
 	iter, err := repo.Essence().NewReferenceIterator()
 	if err != nil {
-		return list, err
+		return nil, err
 	}
 	defer Free(iter)
+
+	var list []string
 
 	nameIter := iter.Names()
 	name, err := nameIter.Next()
@@ -643,25 +573,22 @@ func (repo *Repository) References() ([]string, error) {
 	return list, err
 }
 
-func (repo *Repository) Commits() (commits []*Commit, err error) {
-	headCommit, err := repo.Head.Commit()
+func (repo *Repository) Commits() ([]*Commit, error) {
+	currentTip, err := repo.Head.Commit()
 	if err != nil {
-		return
+		return nil, err
 	}
-	defer Free(headCommit)
+	defer Free(currentTip)
 
-	commits = append(commits, headCommit)
+	commits := []*Commit{currentTip}
 
-	if !headCommit.IsRoot() {
-		parent := headCommit.Parent()
+	parent := currentTip
+	for parent.HasChildren() {
+		parent = parent.Parent()
 		commits = append(commits, parent)
-
-		for !parent.IsRoot() {
-			parent = parent.Parent()
-			commits = append(commits, parent)
-		}
 	}
-	return
+
+	return commits, nil
 }
 
 // CreateTag creates a git tag.
@@ -699,10 +626,10 @@ func (repo *Repository) CreateLocalBranch(branchName string) (branch *Branch, er
 	}
 	defer Free(headCommit)
 
-	return repo.CreateBranch(branchName, headCommit, false)
+	return repo.createBranch(branchName, headCommit, false)
 }
 
-func (repo *Repository) CreateBranch(branchName string, commit *Commit, force bool) (*Branch, error) {
+func (repo *Repository) createBranch(branchName string, commit *Commit, force bool) (*Branch, error) {
 	gitBranch, err := repo.Essence().CreateBranch(branchName, commit.Essence(), force)
 	if err != nil {
 		return nil, err
