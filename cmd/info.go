@@ -9,12 +9,6 @@ func init() {
 	rootCmd.AddCommand(infoCmd)
 }
 
-// Example status info output
-// Branch <branchname>
-// Changes:
-// A <filename>
-// M <filename>
-// D <filename>
 var infoCmd = &cobra.Command{
 	Use:   "info",
 	Short: "Show information of the current HEAD.",
