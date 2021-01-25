@@ -8,12 +8,13 @@ build:
 	GOOS=darwin $(AMD64_ARCH) $(GOBUILD) -installsuffix cgo -tags static -o bin/gong-darwin-x86_64 main.go
 	# GOOS=linux $(AMD64_ARCH) $(GOBUILD) -installsuffix cgo -tags static -o bin/gong-linux-x86_64 main.go
 	# GOOS=windows $(GOBUILD) -installsuffix cgo -tags static -o bin/gong.exe main.go
+
 test:
-	$(GOTEST) ./...
+	$(GOTEST) -tags static ./...
 
 coverage:
-	@$(GOTEST) -coverprofile=coverage.out ./...
+	@$(GOTEST) -tags static -coverprofile=coverage.out ./...
 	@$(GOCOVER) -html=coverage.out
 	@rm coverage.out
 
-.PHONY: test coverage
+.PHONY: build test coverage
