@@ -9,6 +9,8 @@ func init() {
 	rootCmd.AddCommand(undoCmd)
 }
 
+// TODO: When command history has been implemented undo the last command instead of last commit.
+// The last command called will be reversed.
 var undoCmd = &cobra.Command{
 	Use:   "undo",
 	Short: "Undo undoes the last command of the user.",
@@ -22,5 +24,14 @@ var undoCmd = &cobra.Command{
 			return
 		}
 		defer gong.Free(repo)
+
+		commit, err := repo.UndoLastCommit()
+		if err != nil {
+			cmd.PrintErr(err)
+			return
+		}
+		defer gong.Free(commit)
+
+		cmd.Printf("undo last commit %s", commit.ID.String())
 	},
 }
