@@ -165,6 +165,27 @@ func (repo *Repository) StatusEntries() ([]git.StatusEntry, error) {
 	return entries, nil
 }
 
+func (repo *Repository) UndoLastCommit() (*Commit, error) {
+	commits, err := repo.Commits()
+	if err != nil {
+		return nil, err
+	}
+
+	var idx int
+
+	if len(commits) > 1 {
+		idx = 1
+	}
+
+	tip := commits[0]
+
+	if err := repo.Essence().ResetToCommit(commits[idx].Essence(), git.ResetSoft, &git.CheckoutOptions{}); err != nil {
+		return nil, err
+	}
+
+	return tip, nil
+}
+
 func (repo *Repository) CurrentBranch() (*Branch, error) {
 	return repo.Head.Branch()
 }
