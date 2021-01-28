@@ -6,7 +6,7 @@ import (
 	git "github.com/libgit2/git2go/v31"
 )
 
-const RefName = "HEAD"
+const headRefName = "HEAD"
 
 var (
 	ErrHeadNotExists  = errors.New("head does not exist")
@@ -19,7 +19,7 @@ type Head struct {
 }
 
 func NewHead(gitRepo *git.Repository) *Head {
-	return &Head{RefName: RefName, repository: gitRepo}
+	return &Head{RefName: headRefName, repository: gitRepo}
 }
 
 func (head *Head) SetReference(refName string) error {

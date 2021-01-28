@@ -1,8 +1,10 @@
 package gong
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/url"
 	"os"
 	"strings"
@@ -86,6 +88,126 @@ func (repo *Repository) FindBranch(branchName string, branchType git.BranchType)
 	}
 
 	return NewBranch(branchName, gitBranch), nil
+}
+
+func (repo *Repository) Merge(branchName string) error {
+	destinationbranch, err := repo.Head.Branch()
+	if err != nil {
+		return err
+	}
+
+	sourceBranch, err := repo.FindBranch(branchName, git.BranchLocal)
+	if err != nil {
+		return err
+	}
+
+	theirAnnCommit, err := sourceBranch.AnnotatedCommit()
+	if err != nil {
+		return err
+	}
+	defer Free(theirAnnCommit)
+
+	mergeHeads := make([]*git.AnnotatedCommit, 1)
+	mergeHeads[0] = theirAnnCommit
+
+	analysis, _, err := repo.essence.MergeAnalysis(mergeHeads)
+	log.Println(err)
+	if err != nil {
+		return err
+	}
+
+	checkoutOpts := git.CheckoutOpts{
+		Strategy: git.CheckoutSafe | git.CheckoutRecreateMissing | git.CheckoutUseTheirs,
+	}
+
+	switch {
+	case analysis&git.MergeAnalysisUnborn != 0:
+		// Head is unborn, merge is impossible
+		return errors.New("cannot merge head doest not exist")
+	case analysis&git.MergeAnalysisUpToDate != 0:
+		// Nothing to merge
+		return errors.New("merge failed, nothing to merge")
+	case analysis&git.MergeAnalysisFastForward != 0:
+		// History has not diverted so we fast forward and just add the commits on top
+
+		sourceCommit, err := repo.FindCommit(sourceBranch.ReferenceID)
+		if err != nil {
+			return err
+		}
+
+		tree, err := repo.FindTree(sourceCommit.Essence().TreeId())
+		log.Println(err)
+		if err != nil {
+			return err
+		}
+
+		if err := repo.CheckoutTree(tree, &checkoutOpts); err != nil {
+			return err
+		}
+
+		if err := repo.Head.SetReference(sourceBranch.RefName); err != nil {
+			return err
+		}
+
+		return nil
+	case analysis&git.MergeAnalysisNormal != 0:
+		mergeOpts, err := git.DefaultMergeOptions()
+		if err != nil {
+			return err
+		}
+
+		mergeOpts.FileFavor = git.MergeFileFavorNormal
+		mergeOpts.TreeFlags = git.MergeTreeFailOnConflict
+
+		if err := repo.Essence().Merge(mergeHeads, &mergeOpts, &checkoutOpts); err != nil {
+			return err
+		}
+
+		index, err := repo.Essence().Index()
+		if err != nil {
+			return err
+		}
+		defer Free(index)
+
+		if index.HasConflicts() {
+			return errors.New("merge conflict, cannot merge. Fix conflicts then commit before merge.")
+		}
+
+		theirCommit, err := repo.FindCommit(sourceBranch.ReferenceID)
+		if err != nil {
+			return err
+		}
+		defer Free(theirCommit)
+
+		treeID, err := index.WriteTree()
+		if err != nil {
+			return err
+		}
+
+		tree, err := repo.FindTree(treeID)
+		if err != nil {
+			return err
+		}
+		defer Free(tree)
+
+		ourCommit, err := repo.Head.Commit()
+		if err != nil {
+			return err
+		}
+		defer Free(ourCommit)
+
+		mergeMessage := fmt.Sprintf("Merge %s into %s", sourceBranch.Name, destinationbranch.Name)
+
+		mergeCommit, err := repo.CreateCommit(tree, mergeMessage, ourCommit, theirCommit)
+		if err != nil {
+			return err
+		}
+		defer Free(mergeCommit)
+
+		return repo.Essence().StateCleanup()
+	}
+
+	return nil
 }
 
 func (repo *Repository) Info() (string, error) {
@@ -381,9 +503,16 @@ func (repo *Repository) CheckoutBranch(branchName string) (*Branch, error) {
 		return nil, err
 	}
 
-	_, err = repo.Stashes.Create(currentBranch)
+	changed, err := repo.Changed()
 	if err != nil {
 		return nil, err
+	}
+
+	if changed {
+		_, err = repo.Stashes.Create(currentBranch)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	checkoutOpts := &git.CheckoutOpts{
@@ -465,19 +594,19 @@ func Open() (repo *Repository, err error) {
 	return NewRepository(gitRepo, index), nil
 }
 
-func (repo *Repository) Changed() error {
+func (repo *Repository) Changed() (bool, error) {
 	diff, err := repo.Essence().DiffIndexToWorkdir(
 		repo.Index,
 		&git.DiffOptions{Flags: git.DiffIncludeUntracked},
 	)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer diff.Free()
 
 	stats, err := diff.Stats()
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer stats.Free()
 
@@ -485,25 +614,30 @@ func (repo *Repository) Changed() error {
 
 	status, err := repo.Essence().StatusList(&git.StatusOptions{})
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer Free(status)
 
 	entryCount, err := status.EntryCount()
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if changeCount == 0 && entryCount == 0 {
-		return fmt.Errorf("no files changed, %w", ErrNothingToCommit)
+		return false, nil
 	}
 
-	return nil
+	return true, nil
 }
 
 func (repo *Repository) AddToIndex(pathspec []string) (*git.Tree, error) {
-	if err := repo.Changed(); err != nil {
+	changed, err := repo.Changed()
+	if err != nil {
 		return nil, err
+	}
+
+	if !changed {
+		return nil, fmt.Errorf("no files changed, %w", ErrNothingToCommit)
 	}
 
 	if err := repo.Index.AddAll(pathspec, git.IndexAddDefault, nil); err != nil {
@@ -522,7 +656,7 @@ func (repo *Repository) AddToIndex(pathspec []string) (*git.Tree, error) {
 	return repo.FindTree(treeID)
 }
 
-func (repo *Repository) CreateCommit(tree *git.Tree, message string) (*Commit, error) {
+func (repo *Repository) CreateCommit(tree *git.Tree, message string, parents ...*Commit) (*Commit, error) {
 	// Implement later.
 	/*
 		if checkEmptyString(msg) {
@@ -556,7 +690,19 @@ func (repo *Repository) CreateCommit(tree *git.Tree, message string) (*Commit, e
 			return nil, err
 		}
 
-		commitID, err = repo.Essence().CreateCommit(head.RefName, signature(), signature(), message, tree, headCommit.Essence())
+		gitCommits := []*git.Commit{headCommit.Essence()}
+		for _, c := range parents {
+			gitCommits = append(gitCommits, c.Essence())
+		}
+
+		commitID, err = repo.Essence().CreateCommit(
+			head.RefName,
+			signature(),
+			signature(),
+			message,
+			tree,
+			gitCommits...,
+		)
 		if err != nil {
 			return nil, err
 		}

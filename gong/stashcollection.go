@@ -31,7 +31,7 @@ func (collection *StashCollection) Essence() *git.StashCollection {
 
 func (collection *StashCollection) Create(currentBranch *Branch) (*Stash, error) {
 	branchID := currentBranch.ReferenceID.String()
-	stashID, err := collection.essence.Save(signature(), branchID, git.StashIncludeUntracked)
+	stashID, err := collection.Essence().Save(signature(), branchID, git.StashIncludeUntracked)
 	if err != nil {
 		return nil, err
 	}
