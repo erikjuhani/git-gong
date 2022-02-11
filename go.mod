@@ -13,4 +13,4 @@ require (
 	golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c // indirect
 )
 
-replace github.com/libgit2/git2go/v31 => ../../go/src/github.com/libgit2/git2go
+replace github.com/libgit2/git2go/v31 => ./vendor/git2go
