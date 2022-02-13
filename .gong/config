@@ -1,0 +1,2 @@
+[rules]
+protected_branch_patterns = ["main"]

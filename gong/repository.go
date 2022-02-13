@@ -806,7 +806,7 @@ func (repo *Repository) CreateLocalBranch(branchName string) (branch *Branch, er
 
 func (repo *Repository) createBranch(branchName string, commit *Commit, force bool) (*Branch, error) {
 	if !config.AllowedBranchPatterns.Match(branchName) {
-		return nil, fmt.Errorf("error branch name did not match allowed template patterns")
+		return nil, errors.New("error branch name did not match allowed template patterns")
 	}
 
 	gitBranch, err := repo.Essence().CreateBranch(branchName, commit.Essence(), force)
