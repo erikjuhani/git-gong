@@ -171,7 +171,7 @@ func (repo *Repository) Merge(branchName string) error {
 		defer Free(index)
 
 		if index.HasConflicts() {
-			return errors.New("merge conflict, cannot merge. Fix conflicts then commit before merge.")
+			return errors.New("merge conflict, cannot merge. Fix conflicts then commit before merge")
 		}
 
 		theirCommit, err := repo.FindCommit(sourceBranch.ReferenceID)
@@ -315,7 +315,7 @@ func (repo *Repository) CurrentBranch() (*Branch, error) {
 
 func (repo *Repository) Tags() ([]*Tag, error) {
 	var tags []*Tag
-	err := repo.Essence().Tags.Foreach(func(name string, id *git.Oid) error {
+	err := repo.Essence().Tags.Foreach(func(name string, _ *git.Oid) error {
 		ref, err := repo.Essence().References.Lookup(name)
 		if err != nil {
 			return err
@@ -632,6 +632,15 @@ func (repo *Repository) Changed() (bool, error) {
 }
 
 func (repo *Repository) AddToIndex(pathspec []string) (*git.Tree, error) {
+	branch, err := repo.Head.Branch()
+	if err != nil {
+		return nil, err
+	}
+
+	if config.ProtectedBranchPatterns.Match(branch.Name) {
+		return nil, errors.New("trying to commit on a protected branch, operation aborted")
+	}
+
 	changed, err := repo.Changed()
 	if err != nil {
 		return nil, err
@@ -674,9 +683,7 @@ func (repo *Repository) CreateCommit(tree *git.Tree, message string, parents ...
 		return nil, ErrEmptyCommitMsg
 	}
 
-	head := repo.Head
-
-	exists, err := head.Exists()
+	exists, err := repo.Head.Exists()
 	if err != nil {
 		return nil, err
 	}
@@ -697,7 +704,7 @@ func (repo *Repository) CreateCommit(tree *git.Tree, message string, parents ...
 		}
 
 		commitID, err = repo.Essence().CreateCommit(
-			head.RefName,
+			repo.Head.RefName,
 			signature(),
 			signature(),
 			message,
@@ -709,13 +716,13 @@ func (repo *Repository) CreateCommit(tree *git.Tree, message string, parents ...
 		}
 	} else {
 		// Initial commit.
-		commitID, err = repo.Essence().CreateCommit(head.RefName, signature(), signature(), message, tree)
+		commitID, err = repo.Essence().CreateCommit(repo.Head.RefName, signature(), signature(), message, tree)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if err := head.Checkout(); err != nil {
+	if err := repo.Head.Checkout(); err != nil {
 		return nil, err
 	}
 

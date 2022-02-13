@@ -13,7 +13,8 @@ import (
 type ConfigKey = string
 
 const (
-	AllowedBranchPatternsKey ConfigKey = "rules.allowed_branch_patterns"
+	AllowedBranchPatternsKey   ConfigKey = "rules.allowed_branch_patterns"
+	ProtectedBranchPatternsKey ConfigKey = "rules.protected_branch_patterns"
 )
 
 const (
@@ -23,6 +24,7 @@ const (
 
 var initFns = []func(){
 	genAllowedBranchPatterns,
+	genProtectedBranchPatterns,
 }
 
 type Patterns []*regexp.Regexp
@@ -41,12 +43,13 @@ func (p Patterns) Match(s string) bool {
 	return false
 }
 
-func (p Patterns) AddPattern(pattern string) {
-	p = append(p, regexFromGlobLike("", pattern))
+func (p *Patterns) AddPattern(pattern string) {
+	*p = append(*p, regexFromGlobLike("", pattern))
 }
 
 var (
-	AllowedBranchPatterns = &Patterns{}
+	AllowedBranchPatterns   = &Patterns{}
+	ProtectedBranchPatterns = &Patterns{}
 )
 
 func Get(key ConfigKey) interface{} {
@@ -58,6 +61,14 @@ func genAllowedBranchPatterns() {
 
 	for _, pattern := range patterns {
 		AllowedBranchPatterns.AddPattern(pattern)
+	}
+}
+
+func genProtectedBranchPatterns() {
+	patterns := viper.GetStringSlice(ProtectedBranchPatternsKey)
+
+	for _, pattern := range patterns {
+		ProtectedBranchPatterns.AddPattern(pattern)
 	}
 }
 
@@ -92,6 +103,7 @@ func Load() error {
 
 func setDefaults() {
 	viper.SetDefault(AllowedBranchPatternsKey, make([]string, 0))
+	viper.SetDefault(ProtectedBranchPatternsKey, make([]string, 0))
 }
 
 func loadConfig() error {
